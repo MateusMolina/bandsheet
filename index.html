@@ -17,6 +17,22 @@
   header { padding: 12px 20px; display: flex; gap: 14px; align-items: baseline; border-bottom: 1px solid var(--line); background: var(--panel); }
   header h1 { margin: 0; font-size: 16px; }
   header span { color: var(--mute); font-size: 13px; }
+  header .small { padding: 3px 9px; font-size: 12px; }
+  .modechk { margin-left: auto; display: flex; gap: 6px; align-items: center; color: var(--ink); font-size: 13px; cursor: pointer; }
+  #songs { display: flex; flex-direction: column; gap: 4px; }
+  .song { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+  .song.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .song .n { color: var(--mute); width: 1.4em; text-align: right; }
+  .song .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .song .sb { display: flex; gap: 3px; }
+  .song .sb button { padding: 1px 7px; line-height: 1.3; }
+  .song .sb button:disabled { opacity: .35; cursor: default; }
+  #contents { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  #contents[hidden] { display: none; }
+  #contents button { padding: 3px 9px; font-size: 12px; }
+  #contents button.sel { border-color: var(--accent); }
+  #contents i, #contents .none i { color: var(--mute); font-style: normal; }
+  #contents .none { font-size: 12px; color: var(--mute); padding: 3px 4px; }
   main { display: grid; grid-template-columns: minmax(300px, 380px) 1fr; gap: 16px; padding: 16px 20px; align-items: start; }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
   section.box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
@@ -61,6 +77,9 @@
   .cap { color: var(--mute); font-size: 12px; margin: 8px auto 4px; width: 841.89pt; max-width: 100%; }
   .grp { display: none; }
   .grp.active { display: block; }
+  .v-read { display: none; }
+  body[data-view=read] .v-read { display: block; }
+  body[data-view=read] .v-print { display: none; }
 
   /* ── booklet sheets: A4 landscape, two A5 pages, units in pt ── */
   .sheet { position: relative; width: 841.89pt; height: 588pt; background: #fff; color: #111; overflow: hidden; margin: 0 auto 14px; box-shadow: var(--shadow); }
@@ -109,7 +128,7 @@
   @media print {
     @page { size: A4 landscape; margin: 0; }
     html, body { background: #fff; }
-    body > header, #controls, #tabs, #bar, #empty, .cap { display: none !important; }
+    body > header, #controls, #tabs, #bar, #foldnote, #contents, #empty, .cap { display: none !important; }
     main { display: block; padding: 0; }
     #sheets { zoom: 1 !important; }
     body[data-all] .grp { display: block; }  /* persistent setting, not toggled around print() */
@@ -118,16 +137,29 @@
     /* The sheet is deliberately a few pt shorter than an A4 landscape page: browsers round page sizes, and a sheet even
        0.1pt taller than the page spills a blank page after every sheet. Break *before* each sheet but the first. */
     .sheet { box-shadow: none; margin: 0; break-inside: avoid; }
-    .sheet ~ .sheet, .grp:not(.pfirst) > .sheet:first-of-type { break-before: page; page-break-before: always; }
+    .v-read { display: none !important; }
+    .v-print { display: block !important; }
+    .sheet ~ .sheet, .grp:not(.pfirst) .v-print > .sheet:first-of-type { break-before: page; page-break-before: always; }
   }
 </style>
 </head>
 <body>
-<header><h1>tabsprint</h1><span>Paste a tab → set up each instrument against it → print as an A4 booklet</span></header>
+<header><h1>tabsprint</h1><span>Paste a tab → set up each instrument against it → print as an A4 booklet</span>
+  <button id="exportCfg" type="button" class="small" title="Download everything (settings, tabs, instruments) as a .json file, e.g. to attach to a bug report">Export config</button>
+  <button id="importCfg" type="button" class="small" title="Load a config file exported from this app">Import config</button>
+  <input type="file" id="importFile" accept=".json,application/json" hidden>
+  <label class="modechk" title="Several songs, each with its own instrument setup, printed in one booklet per instrument"><input type="checkbox" id="modeSet"> Setlist mode</label></header>
 <main>
   <div id="controls">
+    <section class="box" id="setlistBox" hidden>
+      <h2>Setlist</h2>
+      <div id="songs"></div>
+      <div class="toolbar"><button id="addSong" type="button">+ Add song</button></div>
+      <div class="hint">Each song has its own tab, key and instrument setup. One booklet is made per instrument <i>name</i>: it holds
+        every song that has an instrument of that name, in this order, each starting on a new page. A new song copies the current song's instruments.</div>
+    </section>
     <section class="box">
-      <h2>Baseline tab</h2>
+      <h2 id="baseHead">Baseline tab</h2>
       <textarea id="src" spellcheck="false" placeholder="Paste a chord sheet / tab here (chords over lyrics, [Verse] headers, ChordPro, ASCII tab…)"></textarea>
       <div class="toolbar"><button id="example" type="button">Load example</button><button id="clear" type="button">Clear</button></div>
       <div class="two">
@@ -157,17 +189,26 @@
           <option value="booklet">Always booklet (folded, saddle-stitch)</option>
           <option value="flat">Always plain pages side by side (no folding)</option>
         </select></label>
-      <label>Max font size (pt) <input type="number" id="maxFont" min="6" max="14" step="0.5" value="9.5"></label>
+      <div class="two">
+        <label>Max font size (pt) <input type="number" id="maxFont" min="6" max="14" step="0.5" value="9.5"></label>
+        <label title="The text is sized so most lines fit the page width, but never smaller than this: wider lines wrap instead. Raise it for readability (e.g. a song with very long lines), lower it to squeeze more onto a page.">Min font size (pt) <input type="number" id="minFont" min="5" max="14" step="0.5" value="7.5"></label>
+      </div>
+      <div class="hint">Text is sized to fit the width, between min and max; lines that don't fit at the minimum wrap.</div>
     </section>
   </div>
   <div>
     <div id="tabs"></div>
     <div id="bar">
       <div class="info" id="info"></div>
+      <label class="allchk" title="Preview only. Printing is always as the sheets are shown under 'Printed sheets'.">View
+        <select id="view" style="width:auto"><option value="sheets">Printed sheets</option><option value="read">Reading order</option></select></label>
       <button id="jamOpen" type="button" title="Show two instruments side by side, scrolling together">Jam mode</button>
       <label class="allchk"><input type="checkbox" id="printAll"> all instruments in one PDF</label>
       <button id="printOne" class="primary" type="button">Print / save PDF</button>
     </div>
+    <div id="foldnote" class="hint" hidden>Booklet sheets are shown the way they print: imposed for folding, so a sheet's pages are not in reading order
+      (e.g. <b>pages 4 | 1</b> on the front of sheet 1; page 4 is the back cover). Switch <b>View</b> to <i>Reading order</i> to see the pages as a book.</div>
+    <div id="contents" hidden></div>
     <div id="empty">Paste a tab on the left to see the booklet preview.</div>
     <div id="sheets"></div>
     <div class="hint noprint">Print: paper A4 <b>landscape</b>, scale 100%, margins none, headers/footers off. Booklets: <b>duplex, flip on the short edge</b>, fold along the dashed line. "Save as PDF" in the print dialog gives you a file.</div>

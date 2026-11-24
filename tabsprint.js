@@ -122,9 +122,15 @@
     for (const ch of l) out += ch === '\t' ? ' '.repeat(n - (out.length % n)) : ch;
     return out;
   }
+  // Text copied from web pages is full of characters you can't see: zero-width spaces (often at the start of every line),
+  // BOMs, soft hyphens, bidi marks. They are not whitespace to JS, so they break chord/header detection. Remove them (they
+  // take no room, so removing them keeps the visual alignment); turn exotic spaces into plain spaces.
+  const INVISIBLE_RE = /[\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff\u00ad\u180e]/g;
+  const EXOTIC_SPACE_RE = /[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/g;
   function preprocess(text) {
     return text
-      .replace(/\r\n?/g, '\n').replace(/ /g, ' ').replace(/♭/g, 'b').replace(/♯/g, '#')
+      .replace(INVISIBLE_RE, '').replace(EXOTIC_SPACE_RE, ' ').replace(/\u2028|\u2029/g, '\n')
+      .replace(/\r\n?/g, '\n').replace(/\u266d/g, 'b').replace(/\u266f/g, '#')
       .replace(/\[\/?(?:ch|tab|chord)\]/gi, '') // ultimate-guitar markup
       .replace(/<\/?(?:pre|b|i|span)[^>]*>/gi, '') // stray html from copy/paste
       .split('\n').map((l) => expandTabs(l).replace(/\s+$/, '')).join('\n');
@@ -443,7 +449,11 @@
         segs = rest.map((g) => ({ c: g.c - shift, t: g.t, ch: g.ch }));
         continue;
       }
-      let b = lyric.lastIndexOf(' ', cols);
+      // a chord that starts before the break must also end inside the line, so break before any chord that would hang over
+      let limit = cols;
+      for (const g of segs) if (g.c < cols && g.c + g.t.length > cols) limit = Math.min(limit, g.c);
+      let b = lyric.lastIndexOf(' ', limit);
+      if (b <= 0) b = lyric.lastIndexOf(' ', cols);
       if (b <= 0) b = cols;
       const first = segs.filter((g) => g.c < b);
       const rest = segs.filter((g) => g.c >= b);
@@ -468,7 +478,7 @@
     if (unit[0].kind === 'chords') {
       const out = [];
       for (const [sg, ly] of wrapPair(unit[0].segs, unit.length > 1 ? unit[1].text : null, cols)) {
-        out.push(row('chords', { segs: sg }));
+        if (sg.length || ly === null) out.push(row('chords', { segs: sg })); // a wrapped piece with no chords is lyrics only
         if (ly !== null) out.push(row('lyric', { text: ly }));
       }
       return out;
@@ -541,9 +551,12 @@
     return pages;
   }
 
-  function layout(sections, meta, maxSize, fit) {
+  /** The font is sized so ~97% of the lines fit the page width, but never below minSize (default MIN_SIZE):
+   *  at the minimum, wider lines wrap instead of shrinking the text further. minSize is capped at maxSize. */
+  function layout(sections, meta, maxSize, fit, minSize) {
+    const lo = Math.min(minSize || MIN_SIZE, maxSize);
     const base = Math.min(maxSize, CONTENT_W / (0.6 * targetCols(sections)));
-    const size0 = Math.max(Math.min(maxSize, MIN_SIZE), base);
+    const size0 = Math.max(lo, base);
     const run = (sz) => {
       const cols = Math.floor(CONTENT_W / (0.6 * sz));
       const lh = sz * 1.22;
@@ -553,7 +566,7 @@
     };
     let res = run(size0);
     if (fit && res.pages.length % 4 === 1 && res.pages.length > 1) { // pull a lone stray page back onto the sheet
-      for (let s = size0 - 0.25; s >= MIN_SIZE; s -= 0.25) {
+      for (let s = size0 - 0.25; s >= lo; s -= 0.25) {
         const cand = run(s);
         if (cand.pages.length < res.pages.length) { res = cand; break; }
       }
@@ -580,21 +593,23 @@
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const f = (x) => Math.round(x * 100) / 100;
 
-  function pageHtml(L, pageNo, meta, side) {
+  /** localNo: page within its song (1 = title block); globalNo: number printed on the page. */
+  function pageHtml(L, localNo, meta, side, globalNo) {
     const odd = side === 'R'; // right-hand page: gutter (inner margin) on the left
     const left = odd ? INNER : OUTER;
     const right = odd ? OUTER : INNER;
     const sz = L.size, lh = L.lh;
     let h = '';
-    if (pageNo === 1) {
+    if (localNo === 1) {
       let y = TOP;
       for (const l of L.tb) { h += `<div class="${l.cls}" style="left:${f(left)}pt;top:${f(y)}pt;font-size:${l.size}pt">${esc(l.text)}</div>`; y += l.adv; }
     } else {
       h += `<div class="rh" style="left:${f(left)}pt;top:${f(8 * MM)}pt">${esc(meta.title + ' — ' + meta.instName)}</div>`;
     }
-    h += `<div class="pn" style="${odd ? 'right' : 'left'}:${f(odd ? OUTER : OUTER)}pt">${pageNo}</div>`;
-    for (const p of L.pages[pageNo - 1]) {
+    h += `<div class="pn" style="${odd ? 'right' : 'left'}:${f(OUTER)}pt">${globalNo}</div>`;
+    for (const p of L.pages[localNo - 1]) {
       const r = p.row, top = f(TOP + p.y);
+      if (r.kind === 'gap') continue; // spacing only; has no text to draw
       const common = `top:${top}pt;height:${f(lh)}pt;line-height:${f(lh)}pt;font-size:${f(sz)}pt`;
       if (r.kind === 'chords') {
         h += `<div class="ln" style="${common};left:${f(left)}pt">` +
@@ -609,25 +624,50 @@
     return h;
   }
 
-  /** -> { html, pages, sheets, size } for one instrument. */
-  function renderInstrument(sections, meta, opts) {
+  /** One booklet from one or more songs laid out back to back (each song starts on a new page, with its own
+   *  title block; page numbers run through the whole book). parts: [{ sections, meta }].
+   *  -> { html, pages, sides, sheets, mode, size, ranges:[{title, from, to, side}] } */
+  function renderBook(parts, opts) {
     opts = opts || {};
     const want = opts.layout || 'auto'; // auto: booklet for 3+ pages, plain side-by-side spreads for 1–2
-    const L = layout(sections, meta, opts.maxSize || MAX_SIZE, !opts.noFit && want !== 'flat');
-    const n = L.pages.length;
+    const fit = !opts.noFit && want !== 'flat' && parts.length === 1;
+    const refs = [], ranges = [];
+    let size = 0;
+    for (const p of parts) {
+      const L = layout(p.sections, p.meta, opts.maxSize || MAX_SIZE, fit, opts.minSize);
+      ranges.push({ title: p.meta.title, from: refs.length + 1, to: refs.length + L.pages.length });
+      L.pages.forEach((_, i) => refs.push({ L, meta: p.meta, local: i + 1 }));
+      size = size ? Math.min(size, L.size) : L.size;
+    }
+    const n = refs.length;
     const mode = want === 'flat' || (want === 'auto' && n <= 2) ? 'flat' : 'booklet';
     const sides = mode === 'flat' ? flatOrder(n) : bookletOrder(n);
-    let html = '';
-    sides.forEach(([a, b], k) => {
-      const cap = mode === 'flat' ? `Side ${k + 1}` : `Sheet ${(k >> 1) + 1} · ${k % 2 ? 'back' : 'front'}`;
-      html += `<div class="cap">${cap}</div><section class="sheet">`;
-      for (const [pn, x, side] of [[a, 0, 'L'], [b, PW, 'R']]) {
-        if (pn) html += `<div class="pg" style="left:${f(x)}pt">${pageHtml(L, pn, meta, side)}</div>`;
-      }
-      html += (mode === 'booklet' ? '<div class="fold"></div>' : '') + '</section>';
-    });
-    return { html, pages: n, sides: sides.length, sheets: mode === 'flat' ? sides.length : sides.length / 2, mode, size: L.size };
+    const sideOf = {};
+    sides.forEach(([a, b], k) => { if (a) sideOf[a] = k; if (b) sideOf[b] = k; });
+    ranges.forEach((r) => { r.side = sideOf[r.from] || 0; });
+    const lab = (x) => (x ? x : '–');
+    const build = (list, capOf, fold) => {
+      let html = '';
+      list.forEach(([a, b], k) => {
+        html += `<div class="cap">${capOf(k, a, b)}</div><section class="sheet">`;
+        for (const [pn, x, side] of [[a, 0, 'L'], [b, PW, 'R']]) {
+          if (pn) { const ref = refs[pn - 1]; html += `<div class="pg" style="left:${f(x)}pt">${pageHtml(ref.L, ref.local, ref.meta, side, pn)}</div>`; }
+        }
+        html += (fold ? '<div class="fold"></div>' : '') + '</section>';
+      });
+      return html;
+    };
+    // what gets printed: a flat spread per side, or booklet sheets imposed for folding (pages are NOT in reading order)
+    const html = mode === 'flat'
+      ? build(sides, (k, a, b) => `Side ${k + 1} — pages ${lab(a)} | ${lab(b)}`, false)
+      : build(sides, (k, a, b) => `Sheet ${(k >> 1) + 1} · ${k % 2 ? 'back' : 'front'} — pages ${lab(a)} | ${lab(b)}`, true);
+    // the same pages in reading order, for previewing only
+    const htmlReading = mode === 'flat' ? html
+      : build(flatOrder(n), (k, a, b) => `Pages ${a}${b ? ' | ' + b : ''}`, false);
+    ranges.forEach((r) => { r.readSide = (r.from - 1) >> 1; });
+    return { html, htmlReading, pages: n, sides: sides.length, sheets: mode === 'flat' ? sides.length : sides.length / 2, mode, size, ranges };
   }
+  const renderInstrument = (sections, meta, opts) => renderBook([{ sections, meta }], opts);
 
   /** Scrollable, unpaginated view of one instrument's sections for jam mode. */
   function jamHtml(sections) {
@@ -659,7 +699,7 @@
     // parsing / instruments
     parse, chordSegments, detectKey, applyInstrument, resolveBaseline, resolveInstrument, describe,
     // layout / output
-    bookletOrder, flatOrder, renderInstrument, jamHtml, layout, constants: { SHEET_W, SHEET_H, PW, PH, MAX_SIZE },
+    bookletOrder, flatOrder, renderInstrument, renderBook, jamHtml, layout, constants: { SHEET_W, SHEET_H, PW, PH, MAX_SIZE },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TabsPrint = api;

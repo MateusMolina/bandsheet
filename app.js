@@ -47,35 +47,55 @@ C/E       Dm
 Light the way back home (x2)
 `;
 
-  let nextId = 1;
+  let nextId = 1, nextSong = 1;
   const newGuitar = (n) => ({ id: nextId++, name: n || 'guitar', chords: true, tuning: 'standard', capo: '', shape: '' });
   const newVox = () => ({ id: nextId++, name: 'vox', chords: false, tuning: 'standard', capo: '', shape: '' });
+  // a song = one baseline tab + its own instrument configuration
+  const newSong = (instruments) => ({
+    id: nextSong++, text: '', title: '', artist: '',
+    base: { shape: '', capo: 0, key: '' }, // the tab: shape ('' = detect) + capo -> key, or key -> capo
+    instruments: instruments || [newGuitar('guitar')],
+  });
 
   const state = {
-    text: '', title: '', artist: '',
-    base: { shape: '', capo: 0, key: '' }, // the tab: shape ('' = detect) + capo -> key, or key -> capo
-    collapse: false, notes: true, maxFont: 9.5, layout: 'auto', printAll: false,
+    mode: 'single',            // 'single' = one song (the default); 'setlist' = several songs in one booklet per instrument
+    songs: [newSong()], cur: 0, activeKey: null,
+    collapse: false, notes: true, maxFont: 9.5, minFont: 7.5, layout: 'auto', printAll: false,
+    view: 'sheets',            // preview only: 'sheets' = as printed (booklets imposed for folding), 'read' = pages in reading order
     jamA: null, jamB: null, jamFont: 15,
-    instruments: [newGuitar('guitar')], active: null,
   };
+  const cur = () => state.songs[state.cur];
 
+  // Only data saved in the old format (instrument.key = what is now "shape") needs migrating.
+  function normInstrument(i) {
+    if ('key' in i) { i.shape = i.key || ''; delete i.key; if (i.shape || !i.capo) i.capo = ''; }
+    i.shape = i.shape || '';
+    if (i.capo === undefined || i.capo === null) i.capo = '';
+    return i;
+  }
+  /** Replace the whole app state from a saved/imported object. Returns false if it isn't a usable config. */
+  function applyState(s) {
+    if (!s || typeof s !== 'object') return false;
+    let songs;
+    if (Array.isArray(s.songs) && s.songs.length) songs = s.songs;
+    else if (Array.isArray(s.instruments) && s.instruments.length) {   // saved before setlists existed: one flat song
+      songs = [{ text: s.text, title: s.title, artist: s.artist, base: s.base, instruments: s.instruments, baseKey: s.baseKey }];
+      if (s.active) state.activeKey = 'i' + s.active;
+    } else return false;
+    for (const k of ['mode', 'collapse', 'notes', 'maxFont', 'minFont', 'layout', 'printAll', 'view', 'jamA', 'jamB', 'jamFont', 'activeKey']) if (k in s) state[k] = s[k];
+    state.songs = songs.map((sg, n) => {
+      const base = Object.assign({ shape: '', capo: 0, key: '' }, sg.base || {});
+      if (sg.baseKey) base.shape = sg.baseKey;
+      const ins = sg.instruments && sg.instruments.length ? sg.instruments : [newGuitar('guitar')];
+      return { id: n + 1, text: String(sg.text || ''), title: String(sg.title || ''), artist: String(sg.artist || ''), base, instruments: ins.map(normInstrument) };
+    });
+    state.cur = Math.max(0, Math.min(state.songs.length - 1, s.cur || 0));
+    nextSong = state.songs.length + 1;
+    nextId = Math.max(0, ...state.songs.flatMap((sg) => sg.instruments.map((i) => i.id || 0))) + 1;
+    return true;
+  }
   function load() {
-    try {
-      const s = JSON.parse(localStorage.getItem(STORE) || 'null');
-      if (s && Array.isArray(s.instruments) && s.instruments.length) {
-        Object.assign(state, s);
-        // migrate settings saved by earlier versions (baseKey/"play in key" were really shapes)
-        state.base = Object.assign({ shape: '', capo: 0, key: '' }, s.base || {});
-        if (s.baseKey) { state.base.shape = s.baseKey; delete state.baseKey; }
-        for (const i of state.instruments) {
-          if ('key' in i) { i.shape = i.key || ''; delete i.key; }
-          i.shape = i.shape || '';
-          // capo is now '' (auto) or a number; before, a chosen shape always derived the capo and 0 meant "none"
-          if (i.shape || !i.capo) i.capo = '';
-        }
-        nextId = Math.max(0, ...state.instruments.map((i) => i.id)) + 1;
-      }
-    } catch (e) { /* storage unavailable or corrupt: start fresh */ }
+    try { applyState(JSON.parse(localStorage.getItem(STORE) || 'null')); } catch (e) { /* storage unavailable or corrupt: start fresh */ }
   }
   function save() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* ignore */ } }
 
@@ -84,7 +104,7 @@ Light the way back home (x2)
   // set an input's value without disturbing someone who is typing in it
   const setVal = (el, v) => { if ((el.disabled || document.activeElement !== el) && String(el.value) !== String(v)) el.value = v; };
 
-  // ── instrument cards ──
+  // ── instrument cards (of the current song) ──
   function tuningOptions(cur) {
     const presets = Object.keys(T.TUNINGS);
     const isPreset = presets.includes(cur);
@@ -109,12 +129,12 @@ Light the way back home (x2)
     </div>`;
   }
   function renderCards() {
-    $('insts').innerHTML = state.instruments.map(cardHtml).join('');
+    $('insts').innerHTML = cur().instruments.map(cardHtml).join('');
     syncCards();
   }
   function syncCards() {
     for (const card of $('insts').children) {
-      const i = state.instruments.find((x) => x.id === +card.dataset.id);
+      const i = cur().instruments.find((x) => x.id === +card.dataset.id);
       card.querySelector('[data-chordfields]').style.opacity = i.chords ? '' : '.4';
       card.querySelectorAll('[data-chordfields] select, [data-chordfields] input').forEach((el) => { el.disabled = !i.chords; });
     }
@@ -126,16 +146,17 @@ Light the way back home (x2)
     const b = e.target.closest('[data-act=rm]');
     if (!b) return;
     const id = +b.closest('.card').dataset.id;
-    if (state.instruments.length === 1 && !confirm('Remove the last instrument?')) return;
-    state.instruments = state.instruments.filter((x) => x.id !== id);
-    if (state.active === id) state.active = null;
+    const song = cur();
+    if (song.instruments.length === 1 && !confirm('Remove the last instrument?')) return;
+    song.instruments = song.instruments.filter((x) => x.id !== id);
+    if (state.activeKey === 'i' + id) state.activeKey = null;
     renderCards(); update();
   });
   function onCard(e) {
     const card = e.target.closest('.card');
     const f = e.target.dataset.f;
     if (!card || !f) return;
-    const i = state.instruments.find((x) => x.id === +card.dataset.id);
+    const i = cur().instruments.find((x) => x.id === +card.dataset.id);
     const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     if (f === 'name') i.name = v;
     else if (f === 'lyricsOnly') { i.chords = !v; }
@@ -144,70 +165,83 @@ Light the way back home (x2)
     else if (f === 'tuningSel') {
       const wrap = card.querySelector('[data-customwrap]');
       if (v === 'custom') {
-        let cur = i.tuning;
-        try { cur = T.parseTuning(i.tuning).notes.join('-'); } catch (err) { /* keep */ }
-        i.tuning = cur; wrap.style.display = ''; card.querySelector('[data-f=tuningCustom]').value = cur;
+        let c = i.tuning;
+        try { c = T.parseTuning(i.tuning).notes.join('-'); } catch (err) { /* keep */ }
+        i.tuning = c; wrap.style.display = ''; card.querySelector('[data-f=tuningCustom]').value = c;
       } else { i.tuning = v; wrap.style.display = 'none'; }
     } else if (f === 'tuningCustom') { i.tuning = v; }
     syncCards();
     update();
   }
 
-  // ── preview ──
-  let parsedFor = null, parsed = null;
-  function song() {
-    if (parsedFor !== state.text) { parsed = T.parse(state.text); parsedFor = state.text; }
-    return parsed;
+  // ── per-song derived data ──
+  const pcache = new Map();
+  function parsedOf(song) {
+    const c = pcache.get(song.id);
+    if (c && c.text === song.text) return c.s;
+    const s = T.parse(song.text);
+    pcache.set(song.id, { text: song.text, s });
+    return s;
   }
-  let timer = null;
-  function update() { clearTimeout(timer); timer = setTimeout(render, 80); }
-
-  /** Everything derived from the settings: the tab's key/shape/capo and each instrument's. */
-  function setup() {
-    const s = song();
+  /** Everything derived from one song's settings: its tab's key/shape/capo and each instrument's. */
+  function infoOf(song) {
+    const s = parsedOf(song);
     const det = T.detectKey(s);
-    const base = T.resolveBaseline(state.base, det);
-    const res = new Map(state.instruments.map((i) => [i.id, T.resolveInstrument(i, base)]));
-    return { s, det, base, res };
+    const base = T.resolveBaseline(song.base, det);
+    const res = new Map(song.instruments.map((i) => [i.id, T.resolveInstrument(i, base)]));
+    return { song, s, det, base, res, meta: { title: song.title || s.title || 'Untitled', artist: song.artist || s.artist || '' } };
   }
+  const setup = () => infoOf(cur());   // the song being edited (used by jam mode too)
+  const partOf = (info, inst) => {
+    const r0 = info.res.get(inst.id);
+    return {
+      sections: T.applyInstrument(info.s, inst, r0.shift, state.collapse),
+      meta: { title: info.meta.title, artist: info.meta.artist, instName: inst.name.trim() || 'instrument',
+              desc: T.describe(inst, r0, info.base), notes: state.notes ? info.s.notes : [] },
+    };
+  };
+
+  // ── preview ──
+  let timer = null, pendingScroll = false, lastResult = [];
+  function update() { clearTimeout(timer); timer = setTimeout(render, 80); }
 
   function render() {
     save();
-    const { s, det, base, res } = setup();
-    const hasContent = s.sections.length > 0;
+    const setlist = state.mode === 'setlist';
+    const mine = setup();
+    const { s, det, base, res } = mine;
+    const song = cur();
+    const infos = setlist ? state.songs.map((sg) => (sg === song ? mine : infoOf(sg))) : [mine];
+
+    // mode chrome
+    $('modeSet').checked = setlist;
+    $('setlistBox').hidden = !setlist;
+    $('baseHead').textContent = setlist ? `Song ${state.cur + 1} — baseline tab` : 'Baseline tab';
+    if (setlist) {
+      $('songs').innerHTML = state.songs.map((sg, i) => {
+        const t = infos[i].s.sections.length ? infos[i].meta.title : (sg.text.trim() ? 'Untitled' : 'Empty song');
+        return `<div class="song${i === state.cur ? ' sel' : ''}" data-i="${i}"><span class="n">${i + 1}</span><span class="t">${esc(t)}</span>` +
+          `<span class="sb"><button type="button" data-act="up" title="Move up"${i === 0 ? ' disabled' : ''}>↑</button>` +
+          `<button type="button" data-act="down" title="Move down"${i === state.songs.length - 1 ? ' disabled' : ''}>↓</button>` +
+          `<button type="button" data-act="del" title="Remove song"${state.songs.length === 1 ? ' disabled' : ''}>×</button></span></div>`;
+      }).join('');
+    }
 
     // baseline controls: shape + capo -> key, or key -> capo
-    $('baseShape').innerHTML = noteOptions(state.base.shape, `Auto${det ? ` (detected: ${det.name}${det.minor ? ' minor' : ''})` : ''}`);
-    $('baseKey').innerHTML = noteOptions(state.base.key, `Computed (${base.keyText})`);
+    $('baseShape').innerHTML = noteOptions(song.base.shape, `Auto${det ? ` (detected: ${det.name}${det.minor ? ' minor' : ''})` : ''}`);
+    $('baseKey').innerHTML = noteOptions(song.base.key, `Computed (${base.keyText})`);
     const bc = $('baseCapo');
-    bc.disabled = !!state.base.key; // capo is derived when the key is given directly
+    bc.disabled = !!song.base.key; // capo is derived when the key is given directly
     setVal(bc, base.capo);
-    $('baseNote').textContent = state.base.key
+    $('baseNote').textContent = song.base.key
       ? `Song sounds in ${base.keyText}; the tab's ${base.shape} shapes then need capo ${base.capo}.`
       : `${base.shape} shapes${base.capo ? ` with capo ${base.capo}` : ' with no capo'} sound in ${base.keyText}.`;
     $('title').placeholder = s.title || 'Untitled';
     $('artist').placeholder = s.artist || '';
 
-    const meta0 = { title: state.title || s.title || 'Untitled', artist: state.artist || s.artist || '' };
-    const hasTab = s.sections.some((sec) => sec.units.some((u) => u.some((r) => r.kind === 'tab')));
-    let sheetsHtml = '';
-    const results = [];
-    for (const inst of state.instruments) {
-      const name = inst.name.trim() || 'instrument';
-      const r0 = res.get(inst.id);
-      const secs = T.applyInstrument(s, inst, r0.shift, state.collapse);
-      const r = hasContent ? T.renderInstrument(secs, {
-        title: meta0.title, artist: meta0.artist, instName: name,
-        desc: T.describe(inst, r0, base), notes: state.notes ? s.notes : [],
-      }, { maxSize: state.maxFont, layout: state.layout }) : { html: '', pages: 0, sheets: 0, sides: 0, mode: 'flat', size: 0 };
-      results.push({ inst, name, r });
-      sheetsHtml += `<div class="grp" data-id="${inst.id}">${r.html}</div>`;
-    }
-    if (!state.instruments.some((i) => i.id === state.active)) state.active = state.instruments[0] && state.instruments[0].id;
-
     // instrument cards: show what is computed
     for (const card of $('insts').children) {
-      const i = state.instruments.find((x) => x.id === +card.dataset.id);
+      const i = song.instruments.find((x) => x.id === +card.dataset.id);
       const r0 = res.get(i.id);
       const ro = card.querySelector('[data-ro]');
       const input = card.querySelector('[data-f=tuningCustom]');
@@ -228,31 +262,90 @@ Light the way back home (x2)
         ` · ${r0.shift ? `chords shift <b>${r0.shift > 0 ? '+' : ''}${r0.shift}</b> from the tab` : 'chords as in the tab'}`;
     }
 
-    $('sheets').innerHTML = sheetsHtml;
+    // books: single mode = one per instrument of this song; setlist = one per instrument *name*, spanning all songs
+    const books = [];
+    if (!setlist) {
+      for (const inst of song.instruments) books.push({ key: 'i' + inst.id, name: inst.name.trim() || 'instrument', items: [{ info: mine, inst, si: 0 }] });
+    } else {
+      const byKey = new Map();
+      infos.forEach((info, si) => {
+        for (const inst of info.song.instruments) {
+          const nm = inst.name.trim() || 'instrument';
+          const k = 'n:' + nm.toLowerCase();
+          if (!byKey.has(k)) { const b = { key: k, name: nm, items: [] }; byKey.set(k, b); books.push(b); }
+          byKey.get(k).items.push({ info, inst, si });
+        }
+      });
+    }
+    const opts = { maxSize: state.maxFont, minSize: state.minFont, layout: state.layout };
+    const results = books.map((book) => {
+      const items = book.items.filter((it) => it.info.s.sections.length);
+      const r = items.length ? T.renderBook(items.map((it) => partOf(it.info, it.inst)), opts)
+        : { html: '', pages: 0, sheets: 0, sides: 0, mode: 'flat', size: 0, ranges: [] };
+      return { book, items, r };
+    });
+    const hasContent = results.some((x) => x.r.pages);
+    if (!results.some((x) => x.book.key === state.activeKey)) state.activeKey = results[0] && results[0].book.key;
+    const act = results.find((x) => x.book.key === state.activeKey);
+
+    $('sheets').innerHTML = results.map((x) => `<div class="grp" data-key="${esc(x.book.key)}"><div class="v-print">${x.r.html}</div><div class="v-read">${x.r.htmlReading || ''}</div></div>`).join('');
+    document.body.dataset.view = state.view;
+    $('view').value = state.view;
     $('sheets').querySelectorAll('.grp').forEach((g, k) => {
-      g.classList.toggle('active', +g.dataset.id === state.active);
+      const active = g.dataset.key === state.activeKey;
+      g.classList.toggle('active', active);
       // the first group that will be printed must not get a page break before it (that prints an empty first page)
-      g.classList.toggle('pfirst', state.printAll ? k === 0 : +g.dataset.id === state.active);
+      g.classList.toggle('pfirst', state.printAll ? k === 0 : active);
     });
     document.body.toggleAttribute('data-all', !!state.printAll);  // persistent: printing never depends on toggling at print time
     $('empty').style.display = hasContent ? 'none' : '';
     $('bar').style.display = hasContent ? '' : 'none';
-    $('tabs').innerHTML = results.map(({ inst, name, r }) =>
-      `<button type="button" data-id="${inst.id}" class="${inst.id === state.active ? 'active' : ''}">${esc(name)}${hasContent ? ` · ${r.pages} p` : ''}</button>`).join('');
-    const act = results.find((x) => x.inst.id === state.active);
-    if (act && hasContent) {
-      const warn = hasTab && act.inst.chords && res.get(act.inst.id).shift ? ' · ASCII tab frets are printed as in the source (not re-fretted)' : '';
+    $('tabs').innerHTML = results.map(({ book, r }) =>
+      `<button type="button" data-key="${esc(book.key)}" class="${book.key === state.activeKey ? 'active' : ''}">${esc(book.name)}${r.pages ? ` · ${r.pages} p` : ''}</button>`).join('');
+
+    // info + (setlist) contents of the active booklet
+    const hasTab = (info) => info.s.sections.some((sec) => sec.units.some((u) => u.some((r) => r.kind === 'tab')));
+    if (act && act.r.pages) {
+      const shifted = act.items.some((it) => hasTab(it.info) && it.inst.chords && it.info.res.get(it.inst.id).shift);
+      const warn = shifted ? ' · ASCII tab frets are printed as in the source (not re-fretted)' : '';
       const pg = `${act.r.pages} page${act.r.pages === 1 ? '' : 's'}`;
       const out = act.r.mode === 'booklet'
         ? `booklet: ${act.r.sheets} sheet${act.r.sheets === 1 ? '' : 's'}, ${act.r.sides} sides, duplex flip on short edge`
         : `${act.r.sides} side${act.r.sides === 1 ? '' : 's'}, pages side by side (no folding)`;
       $('info').textContent = `${pg} → ${out} · ${act.r.size.toFixed(1)}pt${warn}`;
     }
-    $('jamOpen').disabled = state.instruments.length < 2;
-    $('jamOpen').title = state.instruments.length < 2 ? 'Add a second instrument to use jam mode' : 'Show two instruments side by side, scrolling together';
-    document.title = hasContent ? (state.printAll ? meta0.title : `${meta0.title} - ${(act && act.name) || ''}`) : 'tabsprint';
+    $('foldnote').hidden = !(act && act.r.pages && act.r.mode === 'booklet' && state.view === 'sheets');
+    lastResult = results.map(({ book, items, r }) => ({
+      key: book.key, name: book.name, songs: items.map((it) => it.info.meta.title),
+      pages: r.pages, sheets: r.sheets, sides: r.sides, mode: r.mode, fontPt: +r.size.toFixed(2), ranges: r.ranges,
+    }));
+    const bySong = new Map();
+    if (act) act.items.forEach((it, k) => bySong.set(it.si, act.r.ranges[k]));
+    $('contents').hidden = !(setlist && act && hasContent);
+    if (setlist && act) {
+      $('contents').innerHTML = infos.map((info, si) => {
+        const rg = bySong.get(si);
+        const t = esc(info.s.sections.length ? info.meta.title : (state.songs[si].text.trim() ? 'Untitled' : 'Empty song'));
+        if (rg) return `<button type="button" data-side="${rg.side}" data-rside="${rg.readSide}" class="${si === state.cur ? 'sel' : ''}">${si + 1}. ${t} <i>p.${rg.from}${rg.to > rg.from ? '–' + rg.to : ''}</i></button>`;
+        return `<span class="none">${si + 1}. ${t} <i>(no ${esc(act.book.name)})</i></span>`;
+      }).join('');
+    }
+    $('jamOpen').disabled = song.instruments.length < 2;
+    $('jamOpen').title = song.instruments.length < 2 ? 'Add a second instrument to use jam mode' : 'Show two instruments of this song side by side, scrolling together';
+    document.title = hasContent ? `${setlist ? 'Setlist' : mine.meta.title}${state.printAll || !act ? '' : ' - ' + act.book.name}` : 'tabsprint';
     fitPreview();
+    if (pendingScroll) { pendingScroll = false; const rg = bySong.get(state.cur); if (rg) scrollToSide(rg.side, rg.readSide); }
   }
+
+  function scrollToSide(side, readSide) {
+    const read = state.view === 'read';
+    const sh = $('sheets').querySelectorAll(`.grp.active ${read ? '.v-read' : '.v-print'} .sheet`)[read ? readSide : side];
+    if (sh) (sh.previousElementSibling || sh).scrollIntoView({ block: 'start' });
+  }
+  $('contents').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-side]');
+    if (b) scrollToSide(+b.dataset.side, +b.dataset.rside);
+  });
 
   function fitPreview() {
     const avail = $('sheets').parentElement.clientWidth;
@@ -262,52 +355,126 @@ Light the way back home (x2)
   window.addEventListener('resize', fitPreview);
 
   $('tabs').addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-id]');
-    if (b) { state.active = +b.dataset.id; render(); }
+    const b = e.target.closest('button[data-key]');
+    if (b) { state.activeKey = b.dataset.key; render(); }
   });
 
   // Print just prints what the page already shows (active instrument, or all when the box is ticked).
   $('printOne').addEventListener('click', () => window.print());
   $('printAll').addEventListener('change', (e) => { state.printAll = e.target.checked; update(); });
 
-  // ── baseline + options wiring ──
-  const bind = (id, key, conv) => $(id).addEventListener('input', (e) => {
-    state[key] = conv ? conv(e.target) : e.target.value;
-    update();
+  // ── setlist: song list ──
+  function loadInputs() {
+    const song = cur();
+    $('src').value = song.text; $('title').value = song.title; $('artist').value = song.artist;
+    renderCards();
+  }
+  function selectSong(i) { state.cur = i; pendingScroll = true; loadInputs(); render(); }
+  $('songs').addEventListener('click', (e) => {
+    const row = e.target.closest('.song');
+    if (!row) return;
+    const i = +row.dataset.i;
+    const act = e.target.closest('button[data-act]');
+    if (!act) { if (i !== state.cur) selectSong(i); return; }
+    const a = act.dataset.act;
+    const keep = cur();
+    if (a === 'up' || a === 'down') {
+      const j = a === 'up' ? i - 1 : i + 1;
+      if (j < 0 || j >= state.songs.length) return;
+      [state.songs[i], state.songs[j]] = [state.songs[j], state.songs[i]];
+      state.cur = state.songs.indexOf(keep);
+      render();
+    } else if (a === 'del') {
+      if (state.songs.length === 1) return;
+      const sg = state.songs[i];
+      if (sg.text.trim() && !confirm(`Remove "${infoOf(sg).meta.title}" from the setlist?`)) return;
+      state.songs.splice(i, 1);
+      state.cur = sg === keep ? Math.min(i, state.songs.length - 1) : state.songs.indexOf(keep);
+      pendingScroll = true;
+      loadInputs(); render();
+    }
   });
-  bind('src', 'text'); bind('title', 'title'); bind('artist', 'artist');
+  $('addSong').addEventListener('click', () => {
+    // a new song starts with the same instruments (tuning, capo, shape) as the current one, but its own tab
+    const copy = cur().instruments.map((i) => Object.assign({}, i, { id: nextId++ }));
+    state.songs.splice(state.cur + 1, 0, newSong(copy));
+    state.cur += 1;
+    loadInputs(); render();
+    $('src').focus();
+  });
+  $('modeSet').addEventListener('change', (e) => { state.mode = e.target.checked ? 'setlist' : 'single'; pendingScroll = true; render(); });
+
+  $('view').addEventListener('change', (e) => { state.view = e.target.value; render(); });
+
+  // ── export / import the complete config (to share a reproducible bug report) ──
+  $('exportCfg').addEventListener('click', () => {
+    const payload = {
+      app: 'tabsprint', format: 1, exportedAt: new Date().toISOString(),
+      env: { userAgent: navigator.userAgent, language: navigator.language, viewport: [innerWidth, innerHeight],
+             devicePixelRatio: window.devicePixelRatio, colorScheme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light' },
+      state: JSON.parse(JSON.stringify(state)),   // everything: mode, songs (tabs, key/capo, instruments), options, view
+      result: lastResult,                          // what the app computed from it (pages, sheets, mode, per-song page ranges)
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = `tabsprint-config-${payload.exportedAt.slice(0, 10)}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  $('importCfg').addEventListener('click', () => $('importFile').click());
+  $('importFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const o = JSON.parse(await file.text());
+      if (!applyState(o && o.state ? o.state : o)) throw new Error('no songs/instruments found');
+    } catch (err) { alert('Could not import: this is not a tabsprint config (' + err.message + ').'); return; }
+    pcache.clear(); pendingScroll = false;
+    $('layout').value = state.layout; $('printAll').checked = !!state.printAll;
+    $('collapse').checked = state.collapse; $('notes').checked = state.notes; $('maxFont').value = state.maxFont; $('minFont').value = state.minFont;
+    loadInputs(); render();
+  });
+
+  // ── baseline + options wiring (edits the current song) ──
+  $('src').addEventListener('input', (e) => { cur().text = e.target.value; update(); });
+  $('title').addEventListener('input', (e) => { cur().title = e.target.value; update(); });
+  $('artist').addEventListener('input', (e) => { cur().artist = e.target.value; update(); });
+  $('baseShape').addEventListener('change', (e) => { cur().base.shape = e.target.value; update(); });
+  $('baseKey').addEventListener('change', (e) => { cur().base.key = e.target.value; update(); });
+  $('baseCapo').addEventListener('input', (e) => { cur().base.capo = Math.max(0, Math.min(12, parseInt(e.target.value, 10) || 0)); update(); });
+  const bind = (id, key, conv) => $(id).addEventListener('input', (e) => { state[key] = conv ? conv(e.target) : e.target.value; update(); });
   bind('collapse', 'collapse', (el) => el.checked);
   bind('notes', 'notes', (el) => el.checked);
   bind('layout', 'layout');
   bind('maxFont', 'maxFont', (el) => Math.max(6, Math.min(14, parseFloat(el.value) || 9.5)));
-  $('baseShape').addEventListener('change', (e) => { state.base.shape = e.target.value; update(); });
-  $('baseKey').addEventListener('change', (e) => { state.base.key = e.target.value; update(); });
-  $('baseCapo').addEventListener('input', (e) => { state.base.capo = Math.max(0, Math.min(12, parseInt(e.target.value, 10) || 0)); update(); });
-  $('example').addEventListener('click', () => { state.text = EXAMPLE; $('src').value = EXAMPLE; update(); });
-  $('clear').addEventListener('click', () => { state.text = ''; $('src').value = ''; update(); });
+  bind('minFont', 'minFont', (el) => Math.max(5, Math.min(14, parseFloat(el.value) || 7.5)));
+  $('example').addEventListener('click', () => { cur().text = EXAMPLE; $('src').value = EXAMPLE; update(); });
+  $('clear').addEventListener('click', () => { cur().text = ''; $('src').value = ''; update(); });
   $('addGuitar').addEventListener('click', () => {
-    const n = state.instruments.filter((i) => i.chords).length;
-    state.instruments.push(newGuitar(n ? 'guitar' + (n + 1) : 'guitar'));
+    const song = cur();
+    const n = song.instruments.filter((i) => i.chords).length;
+    song.instruments.push(newGuitar(n ? 'guitar' + (n + 1) : 'guitar'));
     renderCards(); update();
   });
-  $('addVox').addEventListener('click', () => { state.instruments.push(newVox()); renderCards(); update(); });
+  $('addVox').addEventListener('click', () => { cur().instruments.push(newVox()); renderCards(); update(); });
 
   // ── jam mode: two instruments, one scroll ──
   const jam = { A: $('jsA'), B: $('jsB'), lock: null };
 
   function jamPick() {
-    const ids = state.instruments.map((i) => i.id);
+    const ids = cur().instruments.map((i) => i.id);
     if (!ids.includes(state.jamA)) state.jamA = ids[0];
     if (!ids.includes(state.jamB) || state.jamB === state.jamA) state.jamB = ids.find((x) => x !== state.jamA);
   }
   function renderJam() {
     jamPick();
     const { s, base, res } = setup();
-    const opts = state.instruments.map((i) => [i.id, i.name.trim() || 'instrument']);
+    const opts = cur().instruments.map((i) => [i.id, i.name.trim() || 'instrument']);
     for (const [sel, cur] of [['jamA', state.jamA], ['jamB', state.jamB]])
       $(sel).innerHTML = opts.map(([id, n]) => `<option value="${id}"${id === cur ? ' selected' : ''}>${esc(n)}</option>`).join('');
     for (const [k, id] of [['A', state.jamA], ['B', state.jamB]]) {
-      const inst = state.instruments.find((i) => i.id === id);
+      const inst = cur().instruments.find((i) => i.id === id);
       const r0 = res.get(inst.id);
       const secs = T.applyInstrument(s, inst, r0.shift, state.collapse);
       $('jt' + k).innerHTML = `<b>${esc(inst.name.trim() || 'instrument')}</b><div>${esc(T.describe(inst, r0, base))}</div>`;
@@ -357,9 +524,8 @@ Light the way back home (x2)
 
   // ── init ──
   load();
-  $('src').value = state.text; $('title').value = state.title; $('artist').value = state.artist;
   $('layout').value = state.layout; $('printAll').checked = !!state.printAll;
-  $('collapse').checked = state.collapse; $('notes').checked = state.notes; $('maxFont').value = state.maxFont;
-  renderCards();
+  $('collapse').checked = state.collapse; $('notes').checked = state.notes; $('maxFont').value = state.maxFont; $('minFont').value = state.minFont;
+  loadInputs();
   render();
 })();

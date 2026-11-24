@@ -27,6 +27,25 @@ Vocabulary: **shape** = the chord shapes being fingered (named like a key: "A sh
 4. **Jam mode** (needs 2+ instruments): splits the screen in two, one instrument per half, scrolling together. Panes are aligned
    by song section, so a lyrics-only pane stays level with a chord pane even though their lengths differ. Esc closes it; A−/A+ resize the text.
 
+5. **Setlist mode** (checkbox, top right; off by default, so everything above works as before): keep several songs, each with its own
+   baseline tab, key/capo and **its own instrument setup**. One booklet is made per instrument *name* (`guitar1`, `vox`…): it holds,
+   in setlist order, every song that has an instrument of that name, each starting on a new page with its own title block and
+   continuous page numbers. The preview has a contents bar with page ranges (click to jump); songs without that instrument are
+   marked. "+ Add song" copies the current song's instruments so you only change what differs. Print / all-instruments work as in
+   single mode, and the whole book is imposed together, so it needs only as many sheets as the total page count requires.
+   Jam mode and the cards always act on the currently selected song.
+
+6. **View** (preview only): *Printed sheets* shows exactly what prints. For a booklet that means pages **imposed for folding**, so a
+   sheet's pages are not in reading order, e.g. the front of sheet 1 of a 4-page book is `pages 4 | 1` (page 4 is the back cover). Every
+   caption states its pages. *Reading order* shows the same pages as a book (1 | 2, 3 | 4 …). Printing is always the imposed version.
+7. **Export config / Import config** (header): downloads everything (mode, songs with their tabs, key/capo, instruments, options, view)
+   plus the browser details and what the app computed from it (pages, sheets, per-song page ranges) as one `.json` file. Attach it to a
+   bug report; Import loads it back (also on another machine) to reproduce exactly what you saw. Note that it contains the tab text you pasted.
+
+8. **Font size** (Options): the text is sized so ~97% of the lines fit the page width, between a **max** (default 9.5pt) and a **min**
+   (default 7.5pt). At the minimum, lines that are still too wide **wrap** (chords stay above the right words) instead of shrinking the text
+   further. Raise the min for readability, e.g. for a song with very long lines; lower it to squeeze more onto a page.
+
 Settings persist in the browser's localStorage.
 
 ## What the parser understands
@@ -34,7 +53,7 @@ Settings persist in the browser's localStorage.
 Section headers (`[Verse 1]`, `Chorus:`, `(Bridge)`, `{start_of_chorus}`), chord-over-lyric lines, chord-only lines with
 `|`, `x2`, `N.C.`, `Intro:` labels, slash/extended chords, ChordPro (`Hel[C]lo`), Ultimate-Guitar `[ch]` markup, ASCII tab
 blocks (kept intact), `Capo`/`Tuning`/`Key` remarks (URLs dropped), a title / `by Artist` header, and header-less sheets
-(blank lines separate stanzas). Chords are matched against a whitelist of suffixes, so lyrics like "Dad says Gone are the
+(blank lines separate stanzas). Invisible characters that web pages hide in copied text (zero-width spaces, BOMs, soft hyphens, odd spaces) are stripped first. Chords are matched against a whitelist of suffixes, so lyrics like "Dad says Gone are the
 days" aren't mistaken for chords.
 
 ## Limits

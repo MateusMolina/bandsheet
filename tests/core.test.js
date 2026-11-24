@@ -212,3 +212,107 @@ test('a long instrument description wraps inside the page instead of running off
   assert.ok(lines.length > 1);
   assert.ok(lines.every((l) => l.length <= 95), lines.map((l) => l.length).join(','));
 });
+
+test('setlist book: songs back to back, continuous page numbers, title block per song, ranges', () => {
+  const mk = (title, n) => {
+    const song = T.parse(Array.from({ length: n }, (_, i) => `[Verse ${i + 1}]\n C   G\nline ${i}\n Am  F\nline b ${i}\n`).join('\n'));
+    return { sections: T.applyInstrument(song, inst({}), 0), meta: { title, artist: '', instName: 'g', desc: 'd', notes: [] } };
+  };
+  const a = mk('Alpha', 3), b = mk('Beta', 3);
+  const single = T.renderBook([a], { layout: 'booklet' });
+  const book = T.renderBook([a, b], { layout: 'booklet' });
+  assert.equal(book.ranges.length, 2);
+  assert.equal(book.ranges[0].from, 1);
+  assert.equal(book.ranges[1].from, book.ranges[0].to + 1);
+  assert.equal(book.pages, book.ranges[1].to);
+  assert.ok(book.pages > single.pages);
+  // each song gets its own title block; page numbers are global
+  assert.equal([...book.html.matchAll(/class="tt"/g)].length, 2);
+  assert.match(book.html, new RegExp(`class="pn"[^>]*>${book.ranges[1].from}<`));
+  // booklet imposition covers every page exactly once
+  const nums = [...book.html.matchAll(/class="pn"[^>]*>(\d+)</g)].map((m) => +m[1]).sort((x, y) => x - y);
+  assert.deepEqual(nums, Array.from({ length: book.pages }, (_, i) => i + 1));
+  assert.ok(book.ranges.every((r) => Number.isInteger(r.side)));
+  // renderInstrument is the one-song case
+  assert.equal(T.renderInstrument(a.sections, a.meta, { layout: 'booklet' }).pages, single.pages);
+});
+
+test('captions state their pages; reading-order view is in page order; booklet sheets are imposed', () => {
+  const mk = (title, n) => {
+    const song = T.parse(Array.from({ length: n }, (_, i) => `[Verse ${i + 1}]\n C   G\nline ${i}\n Am  F\nline b ${i}\n`).join('\n'));
+    return { sections: T.applyInstrument(song, inst({}), 0), meta: { title, artist: '', instName: 'g', desc: 'd', notes: [] } };
+  };
+  const book = T.renderBook([mk('Long', 30), mk('Short', 2)], { layout: 'booklet' });
+  assert.equal(book.mode, 'booklet');
+  // the book's last page (or a blank pad) sits left of page 1 on the front of sheet 1
+  const lastOnFront = book.pages % 4 === 0 ? book.pages : '–';
+  assert.ok(book.html.includes(`Sheet 1 · front — pages ${lastOnFront} | 1<`));
+  const reading = [...book.htmlReading.matchAll(/class="cap">Pages (\d+)/g)].map((m) => +m[1]);
+  assert.deepEqual(reading, Array.from({ length: Math.ceil(book.pages / 2) }, (_, i) => 2 * i + 1));
+  assert.ok(!book.htmlReading.includes('class="fold"'));
+  const nums = [...book.htmlReading.matchAll(/class="pn"[^>]*>(\d+)</g)].map((m) => +m[1]);
+  assert.deepEqual(nums, Array.from({ length: book.pages }, (_, i) => i + 1));
+  assert.equal(book.ranges[1].readSide, (book.ranges[1].from - 1) >> 1);
+  const flat = T.renderBook([mk('Tiny', 1)]);
+  assert.equal(flat.mode, 'flat');
+  assert.equal(flat.htmlReading, flat.html);
+});
+
+test('minimum font size: wide lines wrap instead of shrinking the text further', () => {
+  const wide = 'word '.repeat(30).trim(); // 149 columns: 2 rows at 7.5pt (79 cols), 3 rows at 9.5pt (62 cols)
+  const song = T.parse(Array.from({ length: 6 }, (_, i) => `[Verse ${i}]\n C        G\n${wide}\n Am       F\n${wide}\n`).join('\n'));
+  const meta = { title: 'T', artist: '', instName: 'g', desc: 'd', notes: [] };
+  const secs = T.applyInstrument(song, inst({}), 0);
+  const small = T.layout(secs, meta, 9.5, false);                 // default minimum 7.5
+  const big = T.layout(secs, meta, 9.5, false, 9.5);              // minimum 9.5 -> text stays big, lines wrap
+  assert.equal(small.size, 7.5);
+  assert.equal(big.size, 9.5);
+  assert.ok(big.pages.length > small.pages.length);
+  const rows = (L) => L.pages.flat().filter((p) => p.row.kind === 'lyric').length;
+  assert.ok(rows(big) > rows(small));                             // more lyric rows = wrapped
+  assert.equal(T.layout(secs, meta, 8, false, 12).size, 8);       // min is capped at max
+  assert.ok(T.layout(secs, meta, 9.5, false, 5).size >= 5);       // lower minimums are allowed (size still follows the width)
+  const r = T.renderBook([{ sections: secs, meta }], { minSize: 9.5 });
+  assert.equal(r.size, 9.5);
+});
+
+test('blank lines inside a section never print the text "undefined"', () => {
+  const song = T.parse('[Verse]\n C   G\nline one\n\n Am  F\nline two\n');
+  assert.ok(song.sections[0].units.some((u) => u[0].kind === 'gap'));
+  const r = T.renderInstrument(T.applyInstrument(song, inst({}), 0), { title: 'T', artist: '', instName: 'g', desc: 'd', notes: [] });
+  assert.ok(!/undefined/.test(r.html));
+  assert.ok(!/undefined/.test(r.htmlReading));
+});
+test('wrapping keeps every chord inside the line and adds no empty chord rows', () => {
+  const lyric = "I hope you didn't catch a tan, I hope you found the right man who'll fix it for ya"; // 82 chars
+  const song = T.parse(`[V]\n${' '.repeat(8)}Cmaj7${' '.repeat(53)}Dm7\n${lyric}\n`);
+  const secs = T.applyInstrument(song, inst({}), 0);
+  const L = T.layout(secs, { title: 'T', artist: '', instName: 'g', desc: 'd', notes: [] }, 9.5, false, 9.5);
+  const cols = Math.floor(357.3 / (0.6 * 9.5));
+  const rows = L.pages.flat().map((p) => p.row).filter((r) => r.kind === 'chords' || r.kind === 'lyric');
+  for (const r of rows) {
+    if (r.kind === 'chords') {
+      assert.ok(r.segs.length > 0, 'empty chord row');
+      assert.ok(Math.max(...r.segs.map((g) => g.c + g.t.length)) <= cols, 'chord hangs past the line: ' + JSON.stringify(r.segs));
+    } else assert.ok(r.text.length <= cols);
+  }
+  const lyrics = rows.filter((r) => r.kind === 'lyric').map((r) => r.text).join(' ');
+  assert.equal(lyrics.replace(/\s+/g, ' '), lyric);               // no words lost or duplicated
+  assert.equal(rows.filter((r) => r.kind === 'chords').flatMap((r) => r.segs.map((g) => g.t)).join(','), 'Cmaj7,Dm7');
+});
+
+test('invisible characters from web copy/paste (zero-width spaces etc.) do not break parsing', () => {
+  const Z = '\u200b';
+  const clean = '[Verse I]\n\nDm           C                   F\nI was scared of dentists and the dark\nDm                      C\nI was scared of pretty girl\n\n[Bridge]\n\nDm   C   F\nOoh, ooh ooh\n';
+  // zero-width space at the start of every line but the first few (as in a real copied page)
+  const dirty = clean.split('\n').map((l, i) => (i < 3 ? l : Z + l)).join('\n');
+  const a = T.parse(clean), b = T.parse(dirty);
+  assert.deepEqual(b.sections.map((x) => x.title), ['Verse I', 'Bridge']);
+  assert.equal(JSON.stringify(b.sections), JSON.stringify(a.sections));   // identical result, columns included
+  assert.equal(b.sections.flatMap((x) => x.units.flat()).filter((r) => r.kind === 'chords').length, 3);
+  // other invisibles / exotic spaces: BOM, soft hyphen, LRM, no-break / thin / ideographic spaces
+  const c = T.parse('\ufeff[Chorus]\n\u200eAm\u2009 F\u00a0 G\nHal\u00adlelujah\u00a0now\u3000ok\n');
+  assert.equal(c.sections[0].title, 'Chorus');
+  assert.deepEqual(c.sections[0].units[0].map((r) => r.kind), ['chords', 'lyric']);
+  assert.equal(c.sections[0].units[0][1].text, 'Hallelujah now ok');
+});
