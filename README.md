@@ -10,7 +10,7 @@ Vocabulary: **shape** = the chord shapes being fingered (named like a key: "A sh
 
 1. Paste the baseline tab. Its **shape** is auto-detected from the chords (editable). Then either set the tab's **capo**
    (the key is computed) or set the **key** directly (the capo is computed).
-2. Add instruments. All of them play the same song, so each sounds in the song key; you fix one side and the other is computed:
+2. Add instruments with **+ Guitar / + Vocals** in the bar above the preview. Each instrument is a **card** there; click a card (or focus or edit a field in it) to select it: the selected card is the one that is previewed and printed, and each card shows its page count. All of them play the same song, so each sounds in the song key; you fix one side and the other is computed:
    - **Lyrics only** — strips chords and tab (vocals).
    - **Tuning** — preset (standard, drop-d, dadgad, baritone-b, ukulele…) or notes like `B-E-A-D-F#-B`. A lower/higher tuning
      changes which shapes you need.

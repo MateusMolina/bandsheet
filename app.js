@@ -66,6 +66,8 @@ Light the way back home (x2)
     jamA: null, jamB: null, jamFont: 15,
   };
   const cur = () => state.songs[state.cur];
+  /** Which booklet an instrument card stands for: by id in single mode, by (case-insensitive) name in setlist mode. */
+  const instKey = (i) => (state.mode === 'setlist' ? 'n:' + (i.name.trim() || 'instrument').toLowerCase() : 'i' + i.id);
 
   // Only data saved in the old format (instrument.key = what is now "shape") needs migrating.
   function normInstrument(i) {
@@ -115,7 +117,8 @@ Light the way back home (x2)
   function cardHtml(i) {
     const custom = !Object.keys(T.TUNINGS).includes(i.tuning);
     return `<div class="card" data-id="${i.id}">
-      <div class="row"><input type="text" class="nm" data-f="name" value="${esc(i.name)}" aria-label="Instrument name">
+      <div class="head"><input type="text" class="nm" data-f="name" value="${esc(i.name)}" aria-label="Instrument name">
+        <span class="cpg" data-pages></span>
         <button type="button" data-act="rm" title="Remove instrument" aria-label="Remove instrument">×</button></div>
       <label class="chk"><input type="checkbox" data-f="lyricsOnly"${i.chords ? '' : ' checked'}> Lyrics only (strip chords)</label>
       <div class="grid" data-chordfields>
@@ -159,7 +162,8 @@ Light the way back home (x2)
     if (!card || !f) return;
     const i = cur().instruments.find((x) => x.id === +card.dataset.id);
     const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-    if (f === 'name') i.name = v;
+    if (f !== 'name') selectCard(card);      // changing a card's settings selects it (a rename keeps the selection, below)
+    if (f === 'name') { const was = instKey(i); i.name = v; if (state.activeKey === was) state.activeKey = instKey(i); }   // the selection follows a rename
     else if (f === 'lyricsOnly') { i.chords = !v; }
     else if (f === 'capo') i.capo = v === '' ? '' : Math.max(0, Math.min(12, parseInt(v, 10) || 0));
     else if (f === 'shape') i.shape = v;
@@ -292,8 +296,20 @@ Light the way back home (x2)
     document.body.toggleAttribute('data-all', !!state.printAll);  // persistent: printing never depends on toggling at print time
     $('empty').style.display = hasContent ? 'none' : '';
     $('bar').style.display = hasContent ? '' : 'none';
-    $('tabs').innerHTML = results.map(({ book, r }) =>
-      `<button type="button" data-key="${esc(book.key)}" class="${book.key === state.activeKey ? 'active' : ''}">${esc(book.name)}${r.pages ? ` · ${r.pages} p` : ''}</button>`).join('');
+    // instrument cards: highlight the active one and show its page count
+    const resByKey = new Map(results.map((x) => [x.book.key, x]));
+    const own = new Set();
+    for (const card of $('insts').children) {
+      const i = song.instruments.find((x) => x.id === +card.dataset.id);
+      const k = instKey(i); own.add(k);
+      card.classList.toggle('active', k === state.activeKey);
+      const rr = resByKey.get(k);
+      card.querySelector('[data-pages]').textContent = rr && rr.r.pages ? `${rr.r.pages} p` : '';
+    }
+    // setlist: booklets for instrument names this song doesn't have (other songs do) get a small selectable card
+    $('ghosts').innerHTML = results.filter((x) => !own.has(x.book.key)).map(({ book, r }) =>
+      `<div class="card ghost${book.key === state.activeKey ? ' active' : ''}" data-key="${esc(book.key)}"><div class="head"><b class="nm">${esc(book.name)}</b>` +
+      `<span class="cpg">${r.pages ? r.pages + ' p' : ''}</span></div><div class="ro">Not in this song. Select to preview its booklet; configure it in the songs that have it.</div></div>`).join('');
 
     // info about the active booklet
     const hasTab = (info) => info.s.sections.some((sec) => sec.units.some((u) => u.some((r) => r.kind === 'tab')));
@@ -350,9 +366,23 @@ Light the way back home (x2)
   }
   window.addEventListener('resize', fitPreview);
 
-  $('tabs').addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-key]');
-    if (b) { state.activeKey = b.dataset.key; render(); }
+  // Selecting an instrument = making its card the one that is previewed and printed. A card is selected by clicking it
+  // anywhere (except its remove button), by focusing a field inside it (so Tab / keyboard use works too) or by editing it.
+  function selectCard(card) {
+    if (!card) return false;
+    let key = card.dataset.key;                                   // ghost cards carry their key
+    if (!key) { const i = cur().instruments.find((x) => x.id === +card.dataset.id); if (!i) return false; key = instKey(i); }
+    if (key === state.activeKey) return false;
+    state.activeKey = key;
+    return true;
+  }
+  $('cardrow').addEventListener('click', (e) => {
+    if (e.target.closest('[data-act]')) return;
+    if (selectCard(e.target.closest('.card'))) render();
+  });
+  $('cardrow').addEventListener('focusin', (e) => {
+    if (e.target.closest('[data-act]')) return;
+    if (selectCard(e.target.closest('.card'))) render();
   });
 
   // Print just prints what the page already shows (active instrument, or all when the box is ticked).
