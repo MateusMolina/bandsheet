@@ -31,7 +31,7 @@ Vocabulary: **shape** = the chord shapes being fingered (named like a key: "A sh
    baseline tab, key/capo and **its own instrument setup**. One booklet is made per instrument *name* (`guitar1`, `vox`…): it holds,
    in setlist order, every song that has an instrument of that name, each starting on a new page with its own title block and
    continuous page numbers. The song list shows each song's pages in the selected instrument's booklet (a dash if the song has no
-   instrument of that name); clicking a song selects it and jumps the preview to it, and the left column stays in view while you scroll. "+ Add song" copies the current song's instruments so you only change what differs. Print / all-instruments work as in
+   instrument of that name); clicking a song selects it and jumps the preview to it, and the left column stays in view while you scroll. "+ Add song" copies the current song's instruments so you only change what differs. Renaming an instrument renames it in every song (so it stays one booklet); tuning, capo and shape stay per song. Print / all-instruments work as in
    single mode, and the whole book is imposed together, so it needs only as many sheets as the total page count requires.
    Jam mode and the cards always act on the currently selected song.
 

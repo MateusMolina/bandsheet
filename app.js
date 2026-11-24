@@ -163,7 +163,15 @@ Light the way back home (x2)
     const i = cur().instruments.find((x) => x.id === +card.dataset.id);
     const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     if (f !== 'name') selectCard(card);      // changing a card's settings selects it (a rename keeps the selection, below)
-    if (f === 'name') { const was = instKey(i); i.name = v; if (state.activeKey === was) state.activeKey = instKey(i); }   // the selection follows a rename
+    if (f === 'name') {
+      const was = instKey(i);
+      // In a setlist an instrument is the same instrument in every song when the name matches, so a rename applies to all of
+      // them (otherwise it would split off a new booklet). Everything else on a card stays per song. Runs on every keystroke,
+      // so it matches on the previous name, which all songs share, even if the field is momentarily empty.
+      if (state.mode === 'setlist') for (const sg of state.songs) if (sg !== cur()) for (const x of sg.instruments) if (instKey(x) === was) x.name = v;
+      i.name = v;
+      if (state.activeKey === was) state.activeKey = instKey(i);   // the selection follows a rename
+    }
     else if (f === 'lyricsOnly') { i.chords = !v; }
     else if (f === 'capo') i.capo = v === '' ? '' : Math.max(0, Math.min(12, parseInt(v, 10) || 0));
     else if (f === 'shape') i.shape = v;
