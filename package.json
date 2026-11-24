@@ -1,0 +1,6 @@
+{
+  "name": "tabsprint",
+  "private": true,
+  "description": "Paste a chord sheet / tab, configure instruments against it, print per-instrument A4 booklets",
+  "scripts": { "test": "node --test tests/" }
+}
