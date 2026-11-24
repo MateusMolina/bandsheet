@@ -49,7 +49,13 @@ Light the way back home (x2)
 
   let nextId = 1, nextSong = 1;
   const newGuitar = (n) => ({ id: nextId++, name: n || 'guitar', chords: true, tuning: 'standard', capo: '', shape: '' });
-  const newVox = () => ({ id: nextId++, name: 'vox', chords: false, tuning: 'standard', capo: '', shape: '' });
+  // names that mean "sings the words": typing one turns on "lyrics only" (so you don't have to tick it every time)
+  const VOCAL_NAME_RE = /^(vox|voc|voice|singer|lyrics)/i;
+  /** A name no instrument has in any song, so a new instrument never silently becomes another song's instrument. */
+  function freshInstrumentName() {
+    const used = new Set(state.songs.flatMap((sg) => sg.instruments.map((i) => (i.name.trim() || 'instrument').toLowerCase())));
+    for (let n = 1; ; n++) { const nm = n === 1 ? 'instrument' : 'instrument ' + n; if (!used.has(nm)) return nm; }
+  }
   // a song = one baseline tab + its own instrument configuration
   const newSong = (instruments) => ({
     id: nextSong++, text: '', title: '', artist: '',
@@ -116,24 +122,29 @@ Light the way back home (x2)
   }
   function cardHtml(i) {
     const custom = !Object.keys(T.TUNINGS).includes(i.tuning);
-    return `<div class="card" data-id="${i.id}">
-      <div class="head"><input type="text" class="nm" data-f="name" value="${esc(i.name)}" aria-label="Instrument name">
+    return `<div class="card${i.collapsed ? ' collapsed' : ''}" data-id="${i.id}">
+      <div class="head"><button type="button" class="chev" data-act="toggle" aria-label="Collapse or expand" title="Collapse / expand this card">${i.collapsed ? '▸' : '▾'}</button>
+        <input type="text" class="nm" data-f="name" value="${esc(i.name)}" aria-label="Instrument name">
         <span class="cpg" data-pages></span>
         <button type="button" data-act="rm" title="Remove instrument" aria-label="Remove instrument">×</button></div>
-      <label class="chk"><input type="checkbox" data-f="lyricsOnly"${i.chords ? '' : ' checked'}> Lyrics only (strip chords)</label>
-      <div class="grid" data-chordfields>
-        <label>Tuning <select data-f="tuningSel">${tuningOptions(i.tuning)}</select></label>
-        <label>Capo <input type="number" min="0" max="12" data-f="capo" value="${i.capo}" title="Leave empty for auto: computed so the instrument sounds in the song key"></label>
-        <label class="full" data-customwrap style="${custom ? '' : 'display:none'}">Tuning notes, low→high
-          <input type="text" data-f="tuningCustom" value="${custom ? esc(i.tuning) : ''}" placeholder="B-E-A-D-F#-B"></label>
-        <label class="full">Shape
-          <select data-f="shape">${noteOptions(i.shape, 'Auto')}</select></label>
+      <div class="csum" data-sum></div>
+      <div class="cbody">
+        <label class="chk"><input type="checkbox" data-f="lyricsOnly"${i.chords ? '' : ' checked'}> Lyrics only (strip chords)</label>
+        <div class="grid" data-chordfields>
+          <label>Tuning <select data-f="tuningSel">${tuningOptions(i.tuning)}</select></label>
+          <label>Capo <input type="number" min="0" max="12" data-f="capo" value="${i.capo}" title="Leave empty for auto: computed so the instrument sounds in the song key"></label>
+          <label class="full" data-customwrap style="${custom ? '' : 'display:none'}">Tuning notes, low→high
+            <input type="text" data-f="tuningCustom" value="${custom ? esc(i.tuning) : ''}" placeholder="B-E-A-D-F#-B"></label>
+          <label class="full">Shape
+            <select data-f="shape">${noteOptions(i.shape, 'Auto')}</select></label>
+        </div>
+        <div class="ro" data-ro></div>
       </div>
-      <div class="ro" data-ro></div>
     </div>`;
   }
   function renderCards() {
     $('insts').innerHTML = cur().instruments.map(cardHtml).join('');
+    if ($('collapseAll')) collapseAllLabel();
     syncCards();
   }
   function syncCards() {
@@ -147,6 +158,15 @@ Light the way back home (x2)
   $('insts').addEventListener('input', onCard);
   $('insts').addEventListener('change', onCard);
   $('insts').addEventListener('click', (e) => {
+    const tg = e.target.closest('[data-act=toggle]');
+    if (tg) {                                                           // collapse / expand one card
+      const card = tg.closest('.card');
+      const i = cur().instruments.find((x) => x.id === +card.dataset.id);
+      i.collapsed = !i.collapsed;
+      card.classList.toggle('collapsed', i.collapsed); tg.textContent = i.collapsed ? '▸' : '▾';
+      collapseAllLabel(); save();
+      return;
+    }
     const b = e.target.closest('[data-act=rm]');
     if (!b) return;
     const id = +b.closest('.card').dataset.id;
@@ -168,8 +188,10 @@ Light the way back home (x2)
       // In a setlist an instrument is the same instrument in every song when the name matches, so a rename applies to all of
       // them (otherwise it would split off a new booklet). Everything else on a card stays per song. Runs on every keystroke,
       // so it matches on the previous name, which all songs share, even if the field is momentarily empty.
-      if (state.mode === 'setlist') for (const sg of state.songs) if (sg !== cur()) for (const x of sg.instruments) if (instKey(x) === was) x.name = v;
+      const toVocal = !VOCAL_NAME_RE.test(i.name.trim()) && VOCAL_NAME_RE.test(v.trim());   // only when it *becomes* a vocal name
+      if (state.mode === 'setlist') for (const sg of state.songs) if (sg !== cur()) for (const x of sg.instruments) if (instKey(x) === was) { x.name = v; if (toVocal) x.chords = false; }
       i.name = v;
+      if (toVocal && i.chords) { i.chords = false; card.querySelector('[data-f=lyricsOnly]').checked = true; syncCards(); }
       if (state.activeKey === was) state.activeKey = instKey(i);   // the selection follows a rename
     }
     else if (f === 'lyricsOnly') { i.chords = !v; }
@@ -259,6 +281,8 @@ Light the way back home (x2)
         setVal(capoEl, i.capo);
         capoEl.placeholder = r0.capoAuto ? `auto ${r0.capo}` : '';
       }
+      card.querySelector('[data-sum]').textContent = !i.chords ? 'lyrics only'
+        : `${r0.shape} shapes${r0.capo ? ' · capo ' + r0.capo : ''}${r0.interval ? ' · ' + r0.keyText : ''}`;
       if (!i.chords) ro.innerHTML = `Lyrics only — chords and tab are left out. Sings in <b>${esc(base.keyText)}</b>.`;
       else if (bad) ro.textContent = 'Unrecognised tuning — use notes like B-E-A-D-F#-B.';
       else ro.innerHTML = `<b>${esc(r0.shape)}</b> shapes${r0.capo ? ` + capo <b>${r0.capo}</b>` : ''} → ` +
@@ -362,7 +386,14 @@ Light the way back home (x2)
   function scrollToSide(side, readSide) {
     const read = state.view === 'read';
     const sh = $('sheets').querySelectorAll(`.grp.active ${read ? '.v-read' : '.v-print'} .sheet`)[read ? readSide : side];
-    if (sh) (sh.previousElementSibling || sh).scrollIntoView({ block: 'start' });
+    if (!sh) return;
+    const target = sh.previousElementSibling || sh;
+    target.scrollIntoView({ block: 'start' });
+    // The instruments bar is frozen at the top, so the target must land just below it, not under it. Measure where it actually
+    // ended up and correct (robust against zoom/scroll-margin differences between browsers; no-op if the page can't scroll further).
+    const want = $('cardrow').getBoundingClientRect().bottom + 8;
+    const off = target.getBoundingClientRect().top - want;
+    if (Math.abs(off) > 0.5) window.scrollBy(0, off);
   }
   /** Scroll the preview to where song i starts in the active instrument's booklet. */
   function jumpToSong(i) { const rg = lastBySong.get(i); if (rg) scrollToSide(rg.side, rg.readSide); }
@@ -485,13 +516,36 @@ Light the way back home (x2)
   bind('minFont', 'minFont', (el) => Math.max(5, Math.min(14, parseFloat(el.value) || 7.5)));
   $('example').addEventListener('click', () => { cur().text = EXAMPLE; $('src').value = EXAMPLE; update(); });
   $('clear').addEventListener('click', () => { cur().text = ''; $('src').value = ''; update(); });
-  $('addGuitar').addEventListener('click', () => {
+  $('addInst').addEventListener('click', () => {
     const song = cur();
-    const n = song.instruments.filter((i) => i.chords).length;
-    song.instruments.push(newGuitar(n ? 'guitar' + (n + 1) : 'guitar'));
+    const inst = newGuitar(freshInstrumentName());
+    song.instruments.push(inst);
+    state.activeKey = instKey(inst);                 // the new instrument is the one you will want to set up
     renderCards(); update();
+    const nm = $('insts').querySelector(`.card[data-id="${inst.id}"] .nm`);
+    if (nm) { nm.focus(); nm.select(); }
   });
-  $('addVox').addEventListener('click', () => { cur().instruments.push(newVox()); renderCards(); update(); });
+  function collapseAllLabel() {
+    const any = cur().instruments.some((i) => !i.collapsed);
+    $('collapseAll').textContent = any ? 'Collapse all' : 'Expand all';
+  }
+  $('collapseAll').addEventListener('click', () => {
+    const collapse = cur().instruments.some((i) => !i.collapsed);
+    for (const i of cur().instruments) i.collapsed = collapse;
+    renderCards(); collapseAllLabel(); save();
+  });
+  // "Lyrics only" sits in every card and is easy to hit while clicking cards to switch instruments: on a card that is not the
+  // selected one, a click on it only selects the card. (Focus selects the card on mousedown, so remember what it was before.)
+  let chkGuard = null;
+  $('cardrow').addEventListener('mousedown', (e) => {
+    const lab = e.target.closest('label.chk'); const card = lab && lab.closest('.card');
+    chkGuard = card ? { card, wasActive: card.classList.contains('active') } : null;
+  }, true);
+  $('cardrow').addEventListener('click', (e) => {
+    const lab = e.target.closest('label.chk');
+    if (lab && chkGuard && chkGuard.card === lab.closest('.card') && !chkGuard.wasActive) e.preventDefault();   // select only, don't toggle
+    chkGuard = null;
+  }, true);
 
   // ── large editor: big text area, per-line "how it is read" gutter, cleanup tools, live preview ──
   const ed = { open: false, inst: null, timer: null };
