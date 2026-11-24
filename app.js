@@ -61,6 +61,7 @@ Light the way back home (x2)
     mode: 'single',            // 'single' = one song (the default); 'setlist' = several songs in one booklet per instrument
     songs: [newSong()], cur: 0, activeKey: null,
     collapse: false, notes: true, maxFont: 9.5, minFont: 7.5, layout: 'auto', printAll: false,
+    editorPreview: true,       // the large editor shows a live preview next to the text
     view: 'sheets',            // preview only: 'sheets' = as printed (booklets imposed for folding), 'read' = pages in reading order
     jamA: null, jamB: null, jamFont: 15,
   };
@@ -82,7 +83,7 @@ Light the way back home (x2)
       songs = [{ text: s.text, title: s.title, artist: s.artist, base: s.base, instruments: s.instruments, baseKey: s.baseKey }];
       if (s.active) state.activeKey = 'i' + s.active;
     } else return false;
-    for (const k of ['mode', 'collapse', 'notes', 'maxFont', 'minFont', 'layout', 'printAll', 'view', 'jamA', 'jamB', 'jamFont', 'activeKey']) if (k in s) state[k] = s[k];
+    for (const k of ['mode', 'collapse', 'notes', 'maxFont', 'minFont', 'layout', 'printAll', 'view', 'editorPreview', 'jamA', 'jamB', 'jamFont', 'activeKey']) if (k in s) state[k] = s[k];
     state.songs = songs.map((sg, n) => {
       const base = Object.assign({ shape: '', capo: 0, key: '' }, sg.base || {});
       if (sg.baseKey) base.shape = sg.baseKey;
@@ -459,6 +460,107 @@ Light the way back home (x2)
   });
   $('addVox').addEventListener('click', () => { cur().instruments.push(newVox()); renderCards(); update(); });
 
+  // ── large editor: big text area, per-line "how it is read" gutter, cleanup tools, live preview ──
+  const ed = { open: false, inst: null, timer: null };
+  const KIND_TAG = { header: 'H', chords: 'C', lyric: 'L', tab: 'T', meta: 'M', blank: '·' };
+
+  function editorGutter() {
+    const ta = $('etext');
+    const kinds = T.lineKinds(ta.value);
+    $('egut').innerHTML = kinds.map((k, i) =>
+      `<div class="k-${k.kind}${k.odd ? ' odd' : ''}" title="${k.odd ? 'contains invisible characters; ' : ''}read as ${k.kind}">${k.odd ? '⚠' : ''}${i + 1} <b>${KIND_TAG[k.kind]}</b></div>`).join('');
+    $('egut').scrollTop = ta.scrollTop;
+    const odd = T.countOdd(ta.value);
+    $('toolOdd').classList.toggle('warn', odd > 0);
+    const counts = kinds.reduce((a, k) => { a[k.kind] = (a[k.kind] || 0) + 1; return a; }, {});
+    $('estatus').textContent = (odd ? `⚠ ${odd} invisible character${odd === 1 ? '' : 's'} — use “Clean invisible characters”. ` : '') +
+      `${kinds.length} lines · ${counts.header || 0} headers · ${counts.chords || 0} chord lines · ${counts.lyric || 0} lyric lines`;
+    $('estatus').dataset.base = $('estatus').textContent;
+  }
+  function editorPreview() {
+    $('ebody').classList.toggle('nopreview', !state.editorPreview);
+    $('ePrevOn').checked = state.editorPreview;
+    $('ePrevInst').style.display = state.editorPreview ? '' : 'none';
+    if (!state.editorPreview) return;
+    const song = cur();
+    if (!song.instruments.some((i) => i.id === ed.inst)) ed.inst = (song.instruments.find((i) => i.chords) || song.instruments[0]).id;
+    $('ePrevInst').innerHTML = song.instruments.map((i) => `<option value="${i.id}"${i.id === ed.inst ? ' selected' : ''}>${esc(i.name.trim() || 'instrument')}</option>`).join('');
+    const info = infoOf(song);
+    const inst = song.instruments.find((i) => i.id === ed.inst);
+    if (!info.s.sections.length) { $('eprev').innerHTML = '<div class="evinfo">Nothing printable yet.</div>'; return; }
+    const r = T.renderBook([partOf(info, inst)], { maxSize: state.maxFont, minSize: state.minFont, layout: 'flat' });
+    const w = $('eprev').clientWidth - 20;
+    $('eprev').innerHTML = `<div class="evinfo">Preview of “${esc(inst.name.trim() || 'instrument')}” — ${r.pages} A5 page${r.pages === 1 ? '' : 's'}, in reading order</div>` +
+      `<div id="eprevin" style="zoom:${Math.min(1, w / (841.89 * 96 / 72)).toFixed(3)}">${r.html}</div>`;
+  }
+  function editorInput() {
+    const song = cur();
+    song.text = $('etext').value;
+    $('src').value = song.text;
+    editorGutter();
+    clearTimeout(ed.timer); ed.timer = setTimeout(editorPreview, 150);
+    update();
+  }
+  /** Replace the whole editor text, keeping the browser's native undo (Ctrl/Cmd+Z) working. */
+  function setEditorText(text) {
+    const ta = $('etext');
+    const top = ta.scrollTop;
+    ta.focus(); ta.select();
+    let done = false;
+    try { done = document.execCommand('insertText', false, text); } catch (e) { done = false; }
+    if (!done || ta.value !== text) { ta.value = text; ta.dispatchEvent(new Event('input', { bubbles: true })); }
+    ta.scrollTop = top; $('egut').scrollTop = top;
+  }
+  const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  function runTool(name) {
+    const before = $('etext').value;
+    let after = before, msg = '';
+    if (name === 'odd') {
+      const n = T.countOdd(before); after = T.stripInvisible(before);
+      msg = n ? `Cleaned ${plural(n, 'invisible/odd character')}.` : 'No invisible characters found.';
+    } else if (name === 'trim') {
+      let n = 0;
+      after = before.split('\n').map((l) => { const t = l.replace(/\s+$/, ''); if (t !== l) n++; return t; }).join('\n');
+      msg = n ? `Trimmed the end of ${plural(n, 'line')}.` : 'No trailing spaces.';
+    } else if (name === 'blank') {
+      after = before.split('\n').map((l) => l.replace(/\s+$/, '')).join('\n').replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '').replace(/\n+$/, '') + '\n';
+      const n = before.split('\n').length - after.split('\n').length;
+      msg = n > 0 ? `Removed ${plural(n, 'blank line')}.` : 'No extra blank lines.';
+    } else if (name === 'dedent') {
+      const lines = before.split('\n');
+      const lead = (l) => l.match(/^ */)[0].length;
+      const m = Math.min(...lines.filter((l) => l.trim()).map(lead), Infinity);
+      if (m > 0 && m !== Infinity) { after = lines.map((l) => l.slice(Math.min(m, lead(l)))).join('\n'); msg = `Removed an indent of ${plural(m, 'space')}.`; }
+      else msg = 'No common indent.';
+    }
+    if (after !== before) setEditorText(after);
+    $('estatus').textContent = msg;   // shown until the next edit refreshes the status line
+  }
+  function openEditor() {
+    ed.open = true;
+    const song = cur();
+    $('etitle').textContent = `Edit tab — ${infoOf(song).meta.title}`;
+    $('etext').value = song.text;
+    $('editor').hidden = false; document.body.classList.add('editing');
+    editorGutter(); editorPreview();
+    $('etext').scrollTop = 0; $('etext').focus();
+    $('etext').setSelectionRange(0, 0);
+  }
+  function closeEditor() {
+    ed.open = false;
+    $('editor').hidden = true; document.body.classList.remove('editing');
+    $('src').value = cur().text;
+    render();
+  }
+  $('expandEdit').addEventListener('click', openEditor);
+  $('editorClose').addEventListener('click', closeEditor);
+  $('etext').addEventListener('input', editorInput);
+  $('etext').addEventListener('scroll', () => { $('egut').scrollTop = $('etext').scrollTop; }, { passive: true });
+  $('editor').addEventListener('click', (e) => { const b = e.target.closest('button[data-tool]'); if (b) runTool(b.dataset.tool); });
+  $('ePrevOn').addEventListener('change', (e) => { state.editorPreview = e.target.checked; save(); editorPreview(); });
+  $('ePrevInst').addEventListener('change', (e) => { ed.inst = +e.target.value; editorPreview(); });
+  window.addEventListener('resize', () => { if (ed.open) editorPreview(); });
+
   // ── jam mode: two instruments, one scroll ──
   const jam = { A: $('jsA'), B: $('jsB'), lock: null };
 
@@ -515,7 +617,7 @@ Light the way back home (x2)
   function closeJam() { $('jam').hidden = true; document.body.classList.remove('jamming'); }
   $('jamOpen').addEventListener('click', openJam);
   $('jamClose').addEventListener('click', closeJam);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('jam').hidden) closeJam(); });
+  document.addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; if (!$('editor').hidden) closeEditor(); else if (!$('jam').hidden) closeJam(); });
   $('jamA').addEventListener('change', (e) => { state.jamA = +e.target.value; if (state.jamB === state.jamA) state.jamB = null; save(); renderJam(); });
   $('jamB').addEventListener('change', (e) => { state.jamB = +e.target.value; if (state.jamA === state.jamB) state.jamA = null; save(); renderJam(); });
   const jamFont = (d) => { state.jamFont = Math.max(10, Math.min(40, state.jamFont + d)); save(); $('jam').style.setProperty('--jf', state.jamFont + 'px'); };

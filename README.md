@@ -46,6 +46,12 @@ Vocabulary: **shape** = the chord shapes being fingered (named like a key: "A sh
    (default 7.5pt). At the minimum, lines that are still too wide **wrap** (chords stay above the right words) instead of shrinking the text
    further. Raise the min for readability, e.g. for a song with very long lines; lower it to squeeze more onto a page.
 
+9. **Edit larger** (under the tab box): opens a full-screen editor with a big text area and a live preview of the printed pages beside it
+   (pick the instrument; switch it off for full width). The gutter shows how each line is read (`H` header, `C` chords, `L` lyrics,
+   `T` tab, `M` note, `·` blank) and flags `⚠` lines containing invisible characters, so you can see why a line is not being recognised.
+   Tools: *Clean invisible characters*, *Trim line ends*, *Collapse blank lines*, *Remove common indent*. They keep the browser's
+   normal undo (⌘Z / Ctrl+Z). Esc or *Done* closes it.
+
 Settings persist in the browser's localStorage.
 
 ## What the parser understands

@@ -136,6 +136,25 @@
       .split('\n').map((l) => expandTabs(l).replace(/\s+$/, '')).join('\n');
   }
 
+  // ── helpers for the editor view ──
+  const INVISIBLE_TEST = new RegExp(INVISIBLE_RE.source);
+  /** Number of invisible / exotic-space characters in a text (what "clean" would remove or replace). */
+  function countOdd(text) {
+    return (String(text).match(INVISIBLE_RE) || []).length + (String(text).match(EXOTIC_SPACE_RE) || []).length;
+  }
+  function stripInvisible(text) { return String(text).replace(INVISIBLE_RE, '').replace(EXOTIC_SPACE_RE, ' '); }
+  /** One entry per raw line: how the parser reads it ('blank' | 'header' | 'chords' | 'lyric' | 'tab' | 'meta')
+   *  and whether the line contains characters you can't see. Same length as text.split('\n'). */
+  function lineKinds(text) {
+    return String(text).split('\n').map((raw) => {
+      const odd = INVISIBLE_TEST.test(raw) || new RegExp(EXOTIC_SPACE_RE.source).test(raw);
+      const line = preprocess(raw).split('\n')[0];
+      const k = classify(line)[0];
+      const kind = k === 'blank' || k === 'skip' ? 'blank' : k === 'chordpro' ? 'chords' : (k === 'title' || k === 'artist' || k === 'note') ? 'meta' : k;
+      return { kind, odd };
+    });
+  }
+
   function chordSegments(line) {
     const segs = [];
     let n = 0;
@@ -697,7 +716,7 @@
     // chords
     isChord, parseChordToken, transposeToken, transposeChord, shapeShift, parseTuning, tuningOffset, TUNINGS, NOTE_NAMES,
     // parsing / instruments
-    parse, chordSegments, detectKey, applyInstrument, resolveBaseline, resolveInstrument, describe,
+    parse, chordSegments, lineKinds, countOdd, stripInvisible, detectKey, applyInstrument, resolveBaseline, resolveInstrument, describe,
     // layout / output
     bookletOrder, flatOrder, renderInstrument, renderBook, jamHtml, layout, constants: { SHEET_W, SHEET_H, PW, PH, MAX_SIZE },
   };

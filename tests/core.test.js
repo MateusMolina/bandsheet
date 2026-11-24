@@ -316,3 +316,15 @@ test('invisible characters from web copy/paste (zero-width spaces etc.) do not b
   assert.deepEqual(c.sections[0].units[0].map((r) => r.kind), ['chords', 'lyric']);
   assert.equal(c.sections[0].units[0][1].text, 'Hallelujah now ok');
 });
+
+test('editor helpers: lineKinds mirrors the parser and flags invisible characters', () => {
+  const text = '[Verse]\n\nC   G\n\u200bI was scared\n\u200bAm  F\ne|---0---|\nCapo 2\n';
+  const k = T.lineKinds(text);
+  assert.equal(k.length, text.split('\n').length);
+  assert.deepEqual(k.map((x) => x.kind), ['header', 'blank', 'chords', 'lyric', 'chords', 'tab', 'meta', 'blank']);
+  assert.deepEqual(k.map((x) => x.odd), [false, false, false, true, true, false, false, false]);
+  assert.equal(T.countOdd(text), 2);
+  assert.equal(T.countOdd(T.stripInvisible(text)), 0);
+  assert.equal(T.stripInvisible('a\u200bb\u00a0c'), 'ab c');
+  assert.equal(T.lineKinds('')[0].kind, 'blank');
+});

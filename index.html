@@ -101,6 +101,36 @@
   .hd i { flex: 1; border-top: .4pt solid #999; }
   .fold { position: absolute; left: 420.945pt; top: 0; bottom: 0; border-left: .4pt dashed #999; }
 
+  /* ── large tab editor ── */
+  #editor { position: fixed; inset: 0; z-index: 30; background: var(--bg); display: grid; grid-template-rows: auto auto 1fr; }
+  #editor[hidden] { display: none; }
+  .ebar { display: flex; gap: 8px; align-items: center; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .ebar button { padding: 3px 9px; font-size: 12px; }
+  .ebar button.warn { border-color: var(--bad); color: var(--bad); }
+  .ebar select { width: auto; }
+  .ebar .sp { flex: 1; }
+  .estatus { color: var(--mute); font-size: 12px; }
+  #elegend { padding: 4px 14px; font-size: 12px; color: var(--mute); background: var(--panel); border-bottom: 1px solid var(--line); }
+  #elegend b { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .ebody { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 0; }
+  .ebody.nopreview { grid-template-columns: minmax(0, 1fr); }
+  .ebody.nopreview .eprev { display: none; }
+  @media (max-width: 900px) { .ebody { grid-template-columns: minmax(0, 1fr); grid-template-rows: 1fr 1fr; } }
+  .ewrap { display: flex; min-height: 0; min-width: 0; border-right: 1px solid var(--line); }
+  .egut { flex: 0 0 auto; width: 70px; overflow: hidden; padding: 10px 0 30px; background: var(--panel); border-right: 1px solid var(--line);
+          font: 12px/20px ui-monospace, Menlo, Consolas, monospace; color: var(--mute); text-align: right; user-select: none; }
+  .egut div { height: 20px; padding-right: 6px; white-space: nowrap; }
+  .egut .k-header b { color: var(--accent); }
+  .egut .k-chords b { color: #2a7bd1; }
+  .egut .k-tab b { color: #2e9d57; }
+  .egut .k-meta b { color: #c77a12; }
+  .egut .odd { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+  #etext { flex: 1; min-width: 0; height: auto; border: 0; border-radius: 0; resize: none; padding: 10px; outline: none; background: var(--bg);
+           font: 13px/20px ui-monospace, Menlo, Consolas, monospace; white-space: pre; overflow: auto; }
+  .eprev { overflow: auto; padding: 10px; min-width: 0; background: var(--bg); }
+  .eprev .evinfo { color: var(--mute); font-size: 12px; margin: 0 0 6px; }
+  body.editing { overflow: hidden; }
+
   /* ── jam mode: two instruments side by side, scrolling together ── */
   #jam { position: fixed; inset: 0; z-index: 20; background: var(--bg); display: grid; grid-template-rows: auto 1fr; }
   #jam[hidden] { display: none; }
@@ -128,7 +158,7 @@
   @media print {
     @page { size: A4 landscape; margin: 0; }
     html, body { background: #fff; }
-    body > header, #controls, #tabs, #bar, #foldnote, #contents, #empty, .cap { display: none !important; }
+    body > header, #editor, #controls, #tabs, #bar, #foldnote, #contents, #empty, .cap { display: none !important; }
     main { display: block; padding: 0; }
     #sheets { zoom: 1 !important; }
     body[data-all] .grp { display: block; }  /* persistent setting, not toggled around print() */
@@ -161,7 +191,7 @@
     <section class="box">
       <h2 id="baseHead">Baseline tab</h2>
       <textarea id="src" spellcheck="false" placeholder="Paste a chord sheet / tab here (chords over lyrics, [Verse] headers, ChordPro, ASCII tab…)"></textarea>
-      <div class="toolbar"><button id="example" type="button">Load example</button><button id="clear" type="button">Clear</button></div>
+      <div class="toolbar"><button id="expandEdit" type="button" title="Open a large editor with a live preview, a per-line view of how the tab is read, and cleanup tools">⤢ Edit larger</button><button id="example" type="button">Load example</button><button id="clear" type="button">Clear</button></div>
       <div class="two">
         <label>Title <input type="text" id="title"></label>
         <label>Artist <input type="text" id="artist"></label>
@@ -214,6 +244,25 @@
     <div class="hint noprint">Print: paper A4 <b>landscape</b>, scale 100%, margins none, headers/footers off. Booklets: <b>duplex, flip on the short edge</b>, fold along the dashed line. "Save as PDF" in the print dialog gives you a file.</div>
   </div>
 </main>
+<div id="editor" hidden>
+  <div class="ebar">
+    <b id="etitle">Edit tab</b>
+    <button type="button" id="toolOdd" data-tool="odd" title="Remove zero-width spaces, BOMs and other characters you can't see; turn odd spaces into plain spaces">Clean invisible characters</button>
+    <button type="button" data-tool="trim" title="Remove spaces at the end of every line">Trim line ends</button>
+    <button type="button" data-tool="blank" title="Collapse runs of blank lines to one, and drop blank lines at the start and end">Collapse blank lines</button>
+    <button type="button" data-tool="dedent" title="Remove the indent shared by all lines (columns stay aligned)">Remove common indent</button>
+    <span class="estatus" id="estatus"></span>
+    <span class="sp"></span>
+    <label class="allchk"><input type="checkbox" id="ePrevOn" checked> Preview</label>
+    <select id="ePrevInst" aria-label="Preview instrument"></select>
+    <button type="button" id="editorClose">Done ✕</button>
+  </div>
+  <div id="elegend">Left column = how each line is read: <b>H</b> section header · <b>C</b> chords · <b>L</b> lyrics · <b>T</b> tab · <b>M</b> note/metadata · <b>·</b> blank · <b style="color:var(--bad)">⚠</b> contains invisible characters. If a line is not read the way you expect, fix it here.</div>
+  <div class="ebody" id="ebody">
+    <div class="ewrap"><div class="egut" id="egut"></div><textarea id="etext" wrap="off" spellcheck="false"></textarea></div>
+    <div class="eprev" id="eprev"></div>
+  </div>
+</div>
 <div id="jam" hidden>
   <div class="jbar">
     <b>Jam mode</b>
