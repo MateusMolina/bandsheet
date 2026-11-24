@@ -203,7 +203,7 @@ Light the way back home (x2)
   };
 
   // ── preview ──
-  let timer = null, pendingScroll = false, lastResult = [];
+  let timer = null, pendingScroll = false, lastResult = [], lastBySong = new Map();
   function update() { clearTimeout(timer); timer = setTimeout(render, 80); }
 
   function render() {
@@ -218,15 +218,6 @@ Light the way back home (x2)
     $('modeSet').checked = setlist;
     $('setlistBox').hidden = !setlist;
     $('baseHead').textContent = setlist ? `Song ${state.cur + 1} — baseline tab` : 'Baseline tab';
-    if (setlist) {
-      $('songs').innerHTML = state.songs.map((sg, i) => {
-        const t = infos[i].s.sections.length ? infos[i].meta.title : (sg.text.trim() ? 'Untitled' : 'Empty song');
-        return `<div class="song${i === state.cur ? ' sel' : ''}" data-i="${i}"><span class="n">${i + 1}</span><span class="t">${esc(t)}</span>` +
-          `<span class="sb"><button type="button" data-act="up" title="Move up"${i === 0 ? ' disabled' : ''}>↑</button>` +
-          `<button type="button" data-act="down" title="Move down"${i === state.songs.length - 1 ? ' disabled' : ''}>↓</button>` +
-          `<button type="button" data-act="del" title="Remove song"${state.songs.length === 1 ? ' disabled' : ''}>×</button></span></div>`;
-      }).join('');
-    }
 
     // baseline controls: shape + capo -> key, or key -> capo
     $('baseShape').innerHTML = noteOptions(song.base.shape, `Auto${det ? ` (detected: ${det.name}${det.minor ? ' minor' : ''})` : ''}`);
@@ -304,7 +295,7 @@ Light the way back home (x2)
     $('tabs').innerHTML = results.map(({ book, r }) =>
       `<button type="button" data-key="${esc(book.key)}" class="${book.key === state.activeKey ? 'active' : ''}">${esc(book.name)}${r.pages ? ` · ${r.pages} p` : ''}</button>`).join('');
 
-    // info + (setlist) contents of the active booklet
+    // info about the active booklet
     const hasTab = (info) => info.s.sections.some((sec) => sec.units.some((u) => u.some((r) => r.kind === 'tab')));
     if (act && act.r.pages) {
       const shifted = act.items.some((it) => hasTab(it.info) && it.inst.chords && it.info.res.get(it.inst.id).shift);
@@ -322,20 +313,26 @@ Light the way back home (x2)
     }));
     const bySong = new Map();
     if (act) act.items.forEach((it, k) => bySong.set(it.si, act.r.ranges[k]));
-    $('contents').hidden = !(setlist && act && hasContent);
-    if (setlist && act) {
-      $('contents').innerHTML = infos.map((info, si) => {
-        const rg = bySong.get(si);
-        const t = esc(info.s.sections.length ? info.meta.title : (state.songs[si].text.trim() ? 'Untitled' : 'Empty song'));
-        if (rg) return `<button type="button" data-side="${rg.side}" data-rside="${rg.readSide}" class="${si === state.cur ? 'sel' : ''}">${si + 1}. ${t} <i>p.${rg.from}${rg.to > rg.from ? '–' + rg.to : ''}</i></button>`;
-        return `<span class="none">${si + 1}. ${t} <i>(no ${esc(act.book.name)})</i></span>`;
+    lastBySong = bySong;
+    if (setlist) {
+      // the song list doubles as the table of contents: each song shows its pages in the active instrument's booklet
+      $('songs').innerHTML = state.songs.map((sg, i) => {
+        const t = infos[i].s.sections.length ? infos[i].meta.title : (sg.text.trim() ? 'Untitled' : 'Empty song');
+        const rg = bySong.get(i);
+        const pages = !act || !hasContent ? '' : rg
+          ? `<span class="pgrange" title="pages in the ${esc(act.book.name)} booklet">p.${rg.from}${rg.to > rg.from ? '–' + rg.to : ''}</span>`
+          : `<span class="pgrange none" title="this song has no instrument called ${esc(act.book.name)}">–</span>`;
+        return `<div class="song${i === state.cur ? ' sel' : ''}" data-i="${i}"><span class="n">${i + 1}</span><span class="t">${esc(t)}</span>${pages}` +
+          `<span class="sb"><button type="button" data-act="up" title="Move up"${i === 0 ? ' disabled' : ''}>↑</button>` +
+          `<button type="button" data-act="down" title="Move down"${i === state.songs.length - 1 ? ' disabled' : ''}>↓</button>` +
+          `<button type="button" data-act="del" title="Remove song"${state.songs.length === 1 ? ' disabled' : ''}>×</button></span></div>`;
       }).join('');
     }
     $('jamOpen').disabled = song.instruments.length < 2;
     $('jamOpen').title = song.instruments.length < 2 ? 'Add a second instrument to use jam mode' : 'Show two instruments of this song side by side, scrolling together';
     document.title = hasContent ? `${setlist ? 'Setlist' : mine.meta.title}${state.printAll || !act ? '' : ' - ' + act.book.name}` : 'tabsprint';
     fitPreview();
-    if (pendingScroll) { pendingScroll = false; const rg = bySong.get(state.cur); if (rg) scrollToSide(rg.side, rg.readSide); }
+    if (pendingScroll) { pendingScroll = false; jumpToSong(state.cur); }
   }
 
   function scrollToSide(side, readSide) {
@@ -343,10 +340,8 @@ Light the way back home (x2)
     const sh = $('sheets').querySelectorAll(`.grp.active ${read ? '.v-read' : '.v-print'} .sheet`)[read ? readSide : side];
     if (sh) (sh.previousElementSibling || sh).scrollIntoView({ block: 'start' });
   }
-  $('contents').addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-side]');
-    if (b) scrollToSide(+b.dataset.side, +b.dataset.rside);
-  });
+  /** Scroll the preview to where song i starts in the active instrument's booklet. */
+  function jumpToSong(i) { const rg = lastBySong.get(i); if (rg) scrollToSide(rg.side, rg.readSide); }
 
   function fitPreview() {
     const avail = $('sheets').parentElement.clientWidth;
@@ -376,7 +371,7 @@ Light the way back home (x2)
     if (!row) return;
     const i = +row.dataset.i;
     const act = e.target.closest('button[data-act]');
-    if (!act) { if (i !== state.cur) selectSong(i); return; }
+    if (!act) { if (i !== state.cur) selectSong(i); else jumpToSong(i); return; }   // clicking the selected song jumps to it again
     const a = act.dataset.act;
     const keep = cur();
     if (a === 'up' || a === 'down') {

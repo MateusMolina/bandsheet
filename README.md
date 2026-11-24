@@ -30,8 +30,8 @@ Vocabulary: **shape** = the chord shapes being fingered (named like a key: "A sh
 5. **Setlist mode** (checkbox, top right; off by default, so everything above works as before): keep several songs, each with its own
    baseline tab, key/capo and **its own instrument setup**. One booklet is made per instrument *name* (`guitar1`, `vox`…): it holds,
    in setlist order, every song that has an instrument of that name, each starting on a new page with its own title block and
-   continuous page numbers. The preview has a contents bar with page ranges (click to jump); songs without that instrument are
-   marked. "+ Add song" copies the current song's instruments so you only change what differs. Print / all-instruments work as in
+   continuous page numbers. The song list shows each song's pages in the selected instrument's booklet (a dash if the song has no
+   instrument of that name); clicking a song selects it and jumps the preview to it, and the left column stays in view while you scroll. "+ Add song" copies the current song's instruments so you only change what differs. Print / all-instruments work as in
    single mode, and the whole book is imposed together, so it needs only as many sheets as the total page count requires.
    Jam mode and the cards always act on the currently selected song.
 
@@ -69,6 +69,10 @@ days" aren't mistaken for chords.
 * Chord alignment relies on a monospace font (Courier New by default).
 
 ## Dev
+
+**After editing `app.js` or `tabsprint.js`, run `npm run stamp`.** The host (GitHub Pages behind a CDN) caches scripts for hours but
+`index.html` for only minutes, so without a version in the script URLs a browser can mix a new page with an old script and half-work
+(buttons silently dead). `stamp` writes a content hash into the `<script src="app.js?v=…">` URLs; `npm test` fails if it is stale.
 
 `tabsprint.js` is the dependency-free core (parser, transposition, layout, booklet imposition, HTML output) and also runs
 under Node; `app.js` is the UI. `npm test` (or `node --test tests/`) runs the core tests.

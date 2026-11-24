@@ -27,12 +27,8 @@
   .song .sb { display: flex; gap: 3px; }
   .song .sb button { padding: 1px 7px; line-height: 1.3; }
   .song .sb button:disabled { opacity: .35; cursor: default; }
-  #contents { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-  #contents[hidden] { display: none; }
-  #contents button { padding: 3px 9px; font-size: 12px; }
-  #contents button.sel { border-color: var(--accent); }
-  #contents i, #contents .none i { color: var(--mute); font-style: normal; }
-  #contents .none { font-size: 12px; color: var(--mute); padding: 3px 4px; }
+  .song .pgrange { color: var(--mute); font-size: 12px; white-space: nowrap; }
+  .song .pgrange.none { opacity: .6; }
   main { display: grid; grid-template-columns: minmax(300px, 380px) 1fr; gap: 16px; padding: 16px 20px; align-items: start; }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
   section.box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
@@ -67,6 +63,10 @@
   .allchk { display: flex; gap: 5px; align-items: center; color: var(--ink); font-size: 13px; }
   .hint { color: var(--mute); font-size: 12px; margin-top: 6px; }
 
+  /* The left column stays in view while the preview scrolls (e.g. after clicking a song jumps to it); if it is taller than
+     the window it scrolls on its own. On narrow screens it is an ordinary stacked block. */
+  #controls { position: sticky; top: 16px; align-self: start; max-height: calc(100vh - 32px); overflow-y: auto; padding-right: 4px; }
+  @media (max-width: 900px) { #controls { position: static; max-height: none; overflow: visible; padding-right: 0; } }
   main > div { min-width: 0; }  /* let the preview column shrink so the sheets can be scaled to fit */
   #tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
   #tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -158,7 +158,7 @@
   @media print {
     @page { size: A4 landscape; margin: 0; }
     html, body { background: #fff; }
-    body > header, #editor, #controls, #tabs, #bar, #foldnote, #contents, #empty, .cap { display: none !important; }
+    body > header, #editor, #controls, #tabs, #bar, #foldnote, #empty, .cap { display: none !important; }
     main { display: block; padding: 0; }
     #sheets { zoom: 1 !important; }
     body[data-all] .grp { display: block; }  /* persistent setting, not toggled around print() */
@@ -186,7 +186,7 @@
       <div id="songs"></div>
       <div class="toolbar"><button id="addSong" type="button">+ Add song</button></div>
       <div class="hint">Each song has its own tab, key and instrument setup. One booklet is made per instrument <i>name</i>: it holds
-        every song that has an instrument of that name, in this order, each starting on a new page. A new song copies the current song's instruments.</div>
+        every song that has an instrument of that name, in this order, each starting on a new page. The numbers on the right are the pages in the selected instrument's booklet; click a song to jump to it. A new song copies the current song's instruments.</div>
     </section>
     <section class="box">
       <h2 id="baseHead">Baseline tab</h2>
@@ -238,7 +238,6 @@
     </div>
     <div id="foldnote" class="hint" hidden>Booklet sheets are shown the way they print: imposed for folding, so a sheet's pages are not in reading order
       (e.g. <b>pages 4 | 1</b> on the front of sheet 1; page 4 is the back cover). Switch <b>View</b> to <i>Reading order</i> to see the pages as a book.</div>
-    <div id="contents" hidden></div>
     <div id="empty">Paste a tab on the left to see the booklet preview.</div>
     <div id="sheets"></div>
     <div class="hint noprint">Print: paper A4 <b>landscape</b>, scale 100%, margins none, headers/footers off. Booklets: <b>duplex, flip on the short edge</b>, fold along the dashed line. "Save as PDF" in the print dialog gives you a file.</div>
@@ -278,7 +277,7 @@
     <div class="jpane"><div class="jtitle" id="jtB"></div><div class="jscroll" id="jsB"></div></div>
   </div>
 </div>
-<script src="tabsprint.js"></script>
-<script src="app.js"></script>
+<script src="tabsprint.js?v=091658716d"></script>
+<script src="app.js?v=ca07d45b01"></script>
 </body>
 </html>
