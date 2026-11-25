@@ -732,7 +732,7 @@ Light the way back home (x2)
     $('jtA').innerHTML = `<button type="button" class="jlink small" data-k="A" title="Copy a link to this view">Link</button><b>${esc(song.title.trim() || 'Untitled')}</b> · ${esc(inst.name.trim() || 'instrument')}<div>${esc(T.describe(inst, r0, base))}</div>`;
     $('jam').style.setProperty('--jf', state.jamFont + 'px');
     const at = keep ? jamPos(jam.A) : null;
-    jam.A.innerHTML = T.jamHtml(T.applyInstrument(s, inst, r0.shift, state.collapse), paneCols(jam.A));
+    jam.A.innerHTML = `<div class="jtitle jtitle-in">${$('jtA').innerHTML}</div>` + T.jamHtml(T.applyInstrument(s, inst, r0.shift, state.collapse), paneCols(jam.A));
     jam.A.scrollTop = 0;
     if (at) jamSetPos(jam.A, at);
     setHash({ v: 'read', n: state.cur, i: inst.name.trim() });
