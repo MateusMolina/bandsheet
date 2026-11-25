@@ -10,7 +10,12 @@ Vocabulary: **shape** = the chord shapes being fingered (named like a key: "A sh
 
 1. Paste the baseline tab. Its **shape** is auto-detected from the chords (editable). Then either set the tab's **capo**
    (the key is computed) or set the **key** directly (the capo is computed).
-2. Add instruments with **+ Instrument** in the bar at the top of the right column. Each instrument is a **card** there; click a card (or focus or edit a field in it) to select it: the selected card is the one that is printed (and shown in the print view), and each card shows its page count. The bar stays at the top, and each card can be **collapsed** (▾) to a one-line summary, or all at once with *Collapse all*. Naming an instrument `vox`, `vocals`, `voice`, `singer` or `lyrics` turns on *Lyrics only* by itself; and clicking *Lyrics only* on a card that is not selected only selects it, so it isn't toggled by accident while switching. All of them play the same song, so each sounds in the song key; you fix one side and the other is computed:
+2. Add instruments with **+ Instrument** in the **fixed bar along the bottom**. Each instrument is a compact **card** there (name, summary, page count); click a
+   card to select it and open its settings as a popover above the bar. The popover closes when focus leaves it (click elsewhere, Tab away), and the card stays
+   selected. The selected card is the one shown in the centre, printed and jammed. The centre is a live **reader** of the selected instrument (chords already
+   shifted for it, A−/A+ for the text size, scroll position kept while you edit the tab); **⤢ Full screen** shows just this instrument filling the screen (Esc
+   or *Back* returns; it is the same view a share link opens). Naming an instrument `vox`, `vocals`, `voice`, `singer` or `lyrics` turns on *Lyrics only* by itself.
+   All of them play the same song, so each sounds in the song key; you fix one side and the other is computed:
    - **Lyrics only** — strips chords and tab (vocals).
    - **Tuning** — preset (standard, drop-d, dadgad, baritone-b, ukulele…) or notes like `B-E-A-D-F#-B`. A lower/higher tuning
      changes which shapes you need.

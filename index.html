@@ -35,6 +35,7 @@
   .song .pgrange { color: var(--mute); font-size: 12px; white-space: nowrap; }
   .song.sel .pgrange { color: var(--accent); }
   .song .pgrange.none { opacity: .6; }
+  body { padding-bottom: var(--bb, 0px); }
   main { display: grid; grid-template-columns: minmax(300px, 380px) 1fr; gap: 16px; padding: 16px 20px; align-items: start; }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
   section.box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
@@ -60,10 +61,14 @@
   .card .grid { display: grid; grid-template-columns: 1fr 84px; gap: 8px; margin-top: 8px; }
   .card .grid .full { grid-column: 1 / -1; }
   .card .chk { display: inline-flex; gap: 6px; align-items: center; margin-top: 8px; color: var(--ink); }
-  .card .chev { padding: 0 6px; line-height: 1.5; }
-  .card .csum { display: none; color: var(--mute); font-size: 12px; margin-top: 4px; }
-  .card.collapsed .csum { display: block; }
-  .card.collapsed .cbody { display: none; }
+  .card .csum { color: var(--mute); font-size: 12px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* the settings of a card open as a popover above the bar (click the card; it closes when focus leaves it) */
+  .card .cbody { display: none; }
+  .card.open .cbody { display: block; position: absolute; bottom: 100%; left: -1px; width: 260px; margin-bottom: 8px; padding: 10px;
+                      background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; box-shadow: var(--shadow); }
+  .card.open.right .cbody { left: auto; right: -1px; }
+  .card.open { border-color: var(--accent); }
+  .card .rmrow { margin-top: 8px; text-align: right; }
   .card .nm { font-weight: 600; }
   .ro { margin-top: 8px; font-size: 12px; color: var(--mute); min-height: 1.4em; }
   .ro b { color: var(--ink); font-weight: 600; }
@@ -75,16 +80,15 @@
 
   /* The left column stays in view while the preview scrolls (e.g. after clicking a song jumps to it); if it is taller than
      the window it scrolls on its own. On narrow screens it is an ordinary stacked block. */
-  #controls { position: sticky; top: 16px; align-self: start; max-height: calc(100vh - 32px); overflow-y: auto; padding-right: 4px; }
+  #controls { position: sticky; top: 16px; align-self: start; max-height: calc(100vh - 32px - var(--bb, 0px)); overflow-y: auto; padding-right: 4px; }
   @media (max-width: 900px) { #controls { position: static; max-height: none; overflow: visible; padding-right: 0; } }
   main > div { min-width: 0; }  /* let the preview column shrink so the sheets can be scaled to fit */
-  /* instruments: one card each in the bar above the preview; the active card is the one being previewed / printed */
-  /* frozen at the top so you can switch instruments while looking at any song; scrolls inside if it gets tall */
-  #cardrow { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; margin-bottom: 12px; position: sticky; top: 0; z-index: 5;
-             background: var(--bg); padding: 8px 0 8px; max-height: 50vh; overflow-y: auto; border-bottom: 1px solid var(--line); }
+  /* instruments: a fixed bar along the bottom, one compact card each; the selected card is the one shown, printed and jammed */
+  #cardrow { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+             padding: 8px 20px; background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -2px 10px rgba(0,0,0,.08); }
   #insts, #ghosts { display: contents; }
   .addcard { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 2px; }
-  .card { width: 236px; margin: 0; cursor: pointer; background: var(--panel); }
+  .card { position: relative; width: 190px; margin: 0; padding: 6px 8px; cursor: pointer; background: var(--panel); }
   .card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
   .card.ghost { opacity: .7; }
   .card.ghost b { display: block; }
@@ -93,6 +97,9 @@
   .card .cpg { color: var(--mute); font-size: 12px; white-space: nowrap; }
   .card.active .cpg { color: var(--accent); }
   #bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  #stage { display: grid; grid-template-rows: auto 1fr; height: max(320px, calc(100vh - 330px)); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--bg); }
+  #stage[hidden] { display: none; }
+  #bar .small { padding: 3px 9px; }
   #bar .info { color: var(--mute); font-size: 13px; flex: 1; }
   #empty { color: var(--mute); padding: 40px 0; text-align: center; }
   .cap { color: var(--mute); font-size: 12px; margin: 8px auto 4px; width: 841.89pt; max-width: 100%; }
@@ -197,7 +204,7 @@
   @media print {
     @page { size: A4 landscape; margin: 0; }
     html, body { background: #fff; }
-    body > header, main, #editor, #foldnote, .cap, .pbar, .pside { display: none !important; }
+    body > header, main, #songrow, #cardrow, #editor, #foldnote, .cap, .pbar, .pside { display: none !important; }
     /* Ctrl+P prints the sheets even with the print view closed */
     #printview, #printview[hidden] { display: block !important; position: static; background: none; }
     .pbody { display: block; overflow: visible; }
@@ -246,19 +253,23 @@
     </section>
   </div>
   <div>
-    <div id="cardrow" aria-label="Instruments">
-      <div id="insts"></div>
-      <div id="ghosts"></div>
-      <div class="addcard"><button id="addInst" type="button" title="Add an instrument to this song">+ Instrument</button><button id="collapseAll" type="button" class="small" title="Collapse or expand every card to save space">Collapse all</button></div>
-    </div>
     <div id="bar">
       <div class="info" id="info"></div>
+      <button id="ipMinus" type="button" class="small" aria-label="Smaller text">A−</button>
+      <button id="ipPlus" type="button" class="small" aria-label="Larger text">A+</button>
+      <button id="ipFull" type="button" title="Show only this instrument, filling the screen (Esc to come back)">⤢ Full screen</button>
       <button id="jamOpen" type="button" title="Show two instruments side by side, scrolling together">Jam mode</button>
       <button id="printOpen" class="primary" type="button" title="Choose layout and font size, preview the sheets and print or save a PDF">Print…</button>
     </div>
+    <div id="stage" hidden><div class="jtitle" id="ipTitle"></div><div class="jscroll" id="ipScroll"></div></div>
     <div id="empty">Paste a tab on the left to get started.</div>
   </div>
 </main>
+<div id="cardrow" aria-label="Instruments">
+  <div id="insts"></div>
+  <div id="ghosts"></div>
+  <button id="addInst" type="button" title="Add an instrument to this song">+ Instrument</button>
+</div>
 <div id="printview" hidden>
   <div class="pbar">
     <b>Print</b>
@@ -327,7 +338,7 @@
     <span class="sp"></span>
     <button id="jamMinus" type="button" aria-label="Smaller text">A−</button>
     <button id="jamPlus" type="button" aria-label="Larger text">A+</button>
-    <button id="jamClose" type="button"><span class="jonly">Close ✕</span><span class="ronly">Edit</span></button>
+    <button id="jamClose" type="button"><span class="jonly">Close ✕</span><span class="ronly">Back</span></button>
   </div>
   <div class="jpanes">
     <div class="jpane"><div class="jtitle" id="jtA"></div><div class="jscroll" id="jsA"></div></div>
@@ -335,6 +346,6 @@
   </div>
 </div>
 <script src="tabsprint.js?v=5afccc4c5b"></script>
-<script src="app.js?v=346d140272"></script>
+<script src="app.js?v=114a8a755e"></script>
 </body>
 </html>

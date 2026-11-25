@@ -119,13 +119,12 @@ Light the way back home (x2)
     return presets.map((k) => `<option value="${k}"${k === cur ? ' selected' : ''}>${k}</option>`).join('') +
       `<option value="custom"${isPreset ? '' : ' selected'}>custom…</option>`;
   }
+  let openId = null;   // the card whose settings popover is open (not saved; at most one)
   function cardHtml(i) {
     const custom = !Object.keys(T.TUNINGS).includes(i.tuning);
-    return `<div class="card${i.collapsed ? ' collapsed' : ''}" data-id="${i.id}">
-      <div class="head"><button type="button" class="chev" data-act="toggle" aria-label="Collapse or expand" title="Collapse / expand this card">${i.collapsed ? '▸' : '▾'}</button>
-        <input type="text" class="nm" data-f="name" value="${esc(i.name)}" aria-label="Instrument name">
-        <span class="cpg" data-pages></span>
-        <button type="button" data-act="rm" title="Remove instrument" aria-label="Remove instrument">×</button></div>
+    return `<div class="card${i.id === openId ? ' open' : ''}" data-id="${i.id}" tabindex="-1">
+      <div class="head"><input type="text" class="nm" data-f="name" value="${esc(i.name)}" aria-label="Instrument name">
+        <span class="cpg" data-pages></span></div>
       <div class="csum" data-sum></div>
       <div class="cbody">
         <label class="chk"><input type="checkbox" data-f="lyricsOnly"${i.chords ? '' : ' checked'}> Lyrics only (strip chords)</label>
@@ -138,13 +137,15 @@ Light the way back home (x2)
             <select data-f="shape">${noteOptions(i.shape, 'Auto')}</select></label>
         </div>
         <div class="ro" data-ro></div>
+        <div class="rmrow"><button type="button" class="small" data-act="rm">Remove instrument</button></div>
       </div>
     </div>`;
   }
   function renderCards() {
+    if (!cur().instruments.some((i) => i.id === openId)) openId = null;
     $('insts').innerHTML = cur().instruments.map(cardHtml).join('');
-    if ($('collapseAll')) collapseAllLabel();
     syncCards();
+    placePopover();
   }
   function syncCards() {
     for (const card of $('insts').children) {
@@ -157,13 +158,11 @@ Light the way back home (x2)
   $('insts').addEventListener('input', onCard);
   $('insts').addEventListener('change', onCard);
   $('insts').addEventListener('click', (e) => {
-    const tg = e.target.closest('[data-act=toggle]');
-    if (tg) {                                                           // collapse / expand one card
-      const card = tg.closest('.card');
-      const i = cur().instruments.find((x) => x.id === +card.dataset.id);
-      i.collapsed = !i.collapsed;
-      card.classList.toggle('collapsed', i.collapsed); tg.textContent = i.collapsed ? '▸' : '▾';
-      collapseAllLabel(); save();
+    const card0 = e.target.closest('.card');
+    if (card0 && !e.target.closest('.cbody')) {   // click a card: select it and toggle its settings (clicking the name only opens them)
+      const id = +card0.dataset.id;
+      openId = openId === id && !e.target.closest('[data-f=name]') ? null : id;
+      syncOpen();
       return;
     }
     const b = e.target.closest('[data-act=rm]');
@@ -172,9 +171,23 @@ Light the way back home (x2)
     const song = cur();
     if (song.instruments.length === 1 && !confirm('Remove the last instrument?')) return;
     song.instruments = song.instruments.filter((x) => x.id !== id);
-    if (state.activeKey === 'i' + id) state.activeKey = null;
+    openId = null;
     renderCards(); update();
   });
+  function syncOpen() {
+    for (const c of $('insts').children) c.classList.toggle('open', +c.dataset.id === openId);
+    placePopover();
+  }
+  /** Keep the popover inside the window: cards near the right edge open it leftwards. */
+  function placePopover() {
+    const c = $('insts').querySelector('.card.open');
+    if (!c) return;
+    c.classList.remove('right');
+    if (c.getBoundingClientRect().left + 270 > innerWidth) c.classList.add('right');
+  }
+  const closeCards = () => { if (openId !== null) { openId = null; syncOpen(); } };   // the card stays selected
+  $('insts').addEventListener('focusout', (e) => { if (openId !== null && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.card.open'))) setTimeout(() => { if (!document.activeElement.closest || !document.activeElement.closest('.card.open')) closeCards(); }, 0); });
+  document.addEventListener('mousedown', (e) => { if (openId !== null && !e.target.closest('.card.open')) closeCards(); });
   function onCard(e) {
     const card = e.target.closest('.card');
     const f = e.target.dataset.f;
@@ -320,7 +333,6 @@ Light the way back home (x2)
     });
     document.body.toggleAttribute('data-all', !!state.printAll);  // persistent: printing never depends on toggling at print time
     $('empty').style.display = hasContent ? 'none' : '';
-    $('bar').style.display = hasContent ? '' : 'none';
     // instrument cards: highlight the active one and show its page count
     const resByKey = new Map(results.map((x) => [x.book.key, x]));
     const own = new Set();
@@ -382,6 +394,7 @@ Light the way back home (x2)
       const rg = bySong.get(i);
       return `<option value="${i}">${esc(infos[i].s.sections.length ? infos[i].meta.title : 'Song ' + (i + 1))}${rg ? ` · p.${rg.from}${rg.to > rg.from ? '–' + rg.to : ''}` : ''}</option>`;
     }).join('');
+    renderInline(hasContent, act);
     fitPreview();
     if (pendingScroll) { pendingScroll = false; jumpToSong(state.cur); }
   }
@@ -524,32 +537,11 @@ Light the way back home (x2)
     const inst = newGuitar(freshInstrumentName());
     song.instruments.push(inst);
     state.activeKey = instKey(inst);                 // the new instrument is the one you will want to set up
+    openId = inst.id;
     renderCards(); update();
     const nm = $('insts').querySelector(`.card[data-id="${inst.id}"] .nm`);
     if (nm) { nm.focus(); nm.select(); }
   });
-  function collapseAllLabel() {
-    const any = cur().instruments.some((i) => !i.collapsed);
-    $('collapseAll').textContent = any ? 'Collapse all' : 'Expand all';
-  }
-  $('collapseAll').addEventListener('click', () => {
-    const collapse = cur().instruments.some((i) => !i.collapsed);
-    for (const i of cur().instruments) i.collapsed = collapse;
-    renderCards(); collapseAllLabel(); save();
-  });
-  // "Lyrics only" sits in every card and is easy to hit while clicking cards to switch instruments: on a card that is not the
-  // selected one, a click on it only selects the card. (Focus selects the card on mousedown, so remember what it was before.)
-  let chkGuard = null;
-  $('cardrow').addEventListener('mousedown', (e) => {
-    const lab = e.target.closest('label.chk'); const card = lab && lab.closest('.card');
-    chkGuard = card ? { card, wasActive: card.classList.contains('active') } : null;
-  }, true);
-  $('cardrow').addEventListener('click', (e) => {
-    const lab = e.target.closest('label.chk');
-    if (lab && chkGuard && chkGuard.card === lab.closest('.card') && !chkGuard.wasActive) e.preventDefault();   // select only, don't toggle
-    chkGuard = null;
-  }, true);
-
   // ── large editor: big text area, per-line "how it is read" gutter, cleanup tools, live preview ──
   const ed = { open: false, inst: null, timer: null };
   const KIND_TAG = { header: 'H', chords: 'C', lyric: 'L', tab: 'T', meta: 'M', blank: '·' };
@@ -728,6 +720,41 @@ Light the way back home (x2)
     $('jam').style.setProperty('--jf', state.jamFont + 'px');
     setHash({ v: 'read', n: state.cur, i: inst.name.trim() });
   }
+  // ── the centre: the selected instrument as a live reader (same view as jam mode, one pane) ──
+  let inlineKey = null;
+  function renderInline(hasContent, act) {
+    $('stage').hidden = !hasContent;
+    $('bar').style.display = hasContent ? '' : 'none';
+    const song = cur();
+    const inst = song.instruments.find((i) => instKey(i) === state.activeKey);
+    $('ipFull').disabled = !inst;
+    if (!hasContent) return;
+    const sc = $('ipScroll');
+    if (!inst) {
+      $('ipTitle').innerHTML = `<b>${esc(act ? act.book.name : '')}</b><div>This song has no instrument with that name. Select one of this song's instruments below.</div>`;
+      sc.innerHTML = ''; inlineKey = null;
+      return;
+    }
+    const { s, base, res } = setup();
+    const r0 = res.get(inst.id);
+    const key = song.id + ':' + inst.id, top = inlineKey === key ? sc.scrollTop : 0;   // keep the place while the tab is being edited
+    $('ipTitle').innerHTML = `<b>${esc(song.title.trim() || s.title || 'Untitled')}</b> · ${esc(inst.name.trim() || 'instrument')}<div>${esc(T.describe(inst, r0, base))}</div>`;
+    sc.innerHTML = T.jamHtml(T.applyInstrument(s, inst, r0.shift, state.collapse));
+    sc.scrollTop = top; inlineKey = key;
+    $('stage').style.setProperty('--jf', state.jamFont + 'px');
+  }
+  $('ipFull').addEventListener('click', () => {
+    const inst = cur().instruments.find((i) => instKey(i) === state.activeKey);
+    if (inst) openReader(state.cur, inst.name.trim());
+  });
+  const inlineFont = (d) => { state.jamFont = Math.max(10, Math.min(40, state.jamFont + d)); save(); $('stage').style.setProperty('--jf', state.jamFont + 'px'); };
+  $('ipMinus').addEventListener('click', () => inlineFont(-1));
+  $('ipPlus').addEventListener('click', () => inlineFont(1));
+  // the fixed instrument bar must not cover the page: reserve its height
+  const reserveBar = () => document.documentElement.style.setProperty('--bb', $('cardrow').offsetHeight + 'px');
+  new ResizeObserver(reserveBar).observe($('cardrow'));
+  window.addEventListener('resize', placePopover);
+
   function openReader(n, name) {
     state.cur = Math.max(0, Math.min(state.songs.length - 1, n || 0));
     const song = cur();
