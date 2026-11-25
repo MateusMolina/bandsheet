@@ -69,7 +69,8 @@ Vocabulary: **shape** = the chord shapes being fingered (named like a key: "A sh
    Tools: *Clean invisible characters*, *Trim line ends*, *Collapse blank lines*, *Remove common indent*. They keep the browser's
    normal undo (⌘Z / Ctrl+Z). Esc or *Done* closes it.
 
-10. **Copy link** (header): copies a permalink with *everything* (songs, tabs, instruments, options) in the URL hash, so the site stays static and nothing
+10. **Report a bug** (header): opens a bug report form on GitHub and downloads your config (see *Export config* above) to drag into it; a report needs that file, since it reproduces exactly what you saw. It contains the tab text you pasted, so leave out anything private.
+11. **Copy link** (header): copies a permalink with *everything* (songs, tabs, instruments, options) in the URL hash, so the site stays static and nothing
     is uploaded. Open it in any browser to get the same setup (if the browser already holds other tabs, it asks before replacing them). It is a
     snapshot, not live sync: edit, then share a new link. A warning shows when a link is long (8 KB+). In **Jam mode**, each pane has a **Link** button
     that copies a link opening **only that instrument**, full width, made for a phone (song picker if the setlist has several; *Edit* leaves the reader).

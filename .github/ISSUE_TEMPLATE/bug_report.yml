@@ -1,0 +1,21 @@
+name: Bug report
+description: Something looks wrong or does not work
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What went wrong?
+      description: What you did, what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Exported config
+      description: |
+        Drag the `bandsheet-config-….json` file here (the "Report a bug" link in the app downloads it for you; otherwise use "Export config" in the header).
+        It reproduces exactly what you saw, and it contains the tab text you pasted, so leave out anything private.
+      placeholder: Drop the .json file here
+    validations:
+      required: true

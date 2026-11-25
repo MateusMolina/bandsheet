@@ -503,7 +503,7 @@ Light the way back home (x2)
   $('view').addEventListener('change', (e) => { state.view = e.target.value; render(); });
 
   // ── export / import the complete config (to share a reproducible bug report) ──
-  $('exportCfg').addEventListener('click', () => {
+  function downloadConfig() {
     const payload = {
       app: 'bandsheet', format: 1, exportedAt: new Date().toISOString(),
       env: { userAgent: navigator.userAgent, language: navigator.language, viewport: [innerWidth, innerHeight],
@@ -516,7 +516,10 @@ Light the way back home (x2)
     a.href = url; a.download = `bandsheet-config-${payload.exportedAt.slice(0, 10)}.json`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-  });
+  }
+  $('exportCfg').addEventListener('click', downloadConfig);
+  // "Report a bug" opens the issue form on GitHub and downloads the config to attach to it (a static page can't upload it for you)
+  $('reportBug').addEventListener('click', downloadConfig);
   $('importCfg').addEventListener('click', () => $('importFile').click());
   $('importFile').addEventListener('change', async (e) => {
     const file = e.target.files[0];

@@ -18,6 +18,8 @@
   header h1 { margin: 0; font-size: 16px; }
   header span { color: var(--mute); font-size: 13px; }
   header .small { padding: 3px 9px; font-size: 12px; }
+  header a.small { color: var(--mute); text-decoration: underline; margin-left: auto; }
+  header a.small + button { margin-left: 0; }
   /* setlist: one tab per song; the selected tab joins the editor below it. Click a tab to edit that song. */
   #songrow { display: flex; gap: 6px; align-items: flex-end; padding: 12px 20px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
   #songs { display: flex; flex-wrap: wrap; gap: 4px; align-items: flex-end; }
@@ -235,6 +237,7 @@
 <header><h1>Bandsheet</h1><span>One setlist, a part for every player: set each instrument against the tab, then share a link or print booklets</span>
   <button id="exportCfg" type="button" class="small" title="Download everything (settings, tabs, instruments) as a .json file, e.g. to attach to a bug report">Export config</button>
   <button id="importCfg" type="button" class="small" title="Load a config file exported from this app">Import config</button>
+  <a id="reportBug" class="small" href="https://github.com/MateusMolina/bandsheet/issues/new?template=bug_report.yml" target="_blank" rel="noopener" title="Opens a bug report on GitHub and downloads your config (the tabs and setup) to attach to it">Report a bug</a>
   <button id="shareLink" type="button" class="small" title="Copy a link that contains everything (tabs, instruments, options). Open it anywhere; nothing is uploaded">Copy link</button>
   <input type="file" id="importFile" accept=".json,application/json" hidden>
 </header>
@@ -356,6 +359,6 @@
   </div>
 </div>
 <script src="bandsheet.js?v=798ec17e11"></script>
-<script src="app.js?v=b92d91ddf5"></script>
+<script src="app.js?v=c16459a8f2"></script>
 </body>
 </html>
