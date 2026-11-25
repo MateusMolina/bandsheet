@@ -195,6 +195,14 @@
   .jl.jn { color: var(--mute); }
   body.jamming { overflow: hidden; }
   .jlink { float: right; font-size: 12px; padding: 2px 8px; }
+  .jbar .jlink { float: none; font-size: inherit; padding: 5px 10px; }
+  .rdlink { display: none; }
+  /* phones: no description header in the reader (saves space); its Link button moves up into the always-visible bar */
+  @media (max-width: 820px) {
+    #jam.reader .jtitle { display: none; }
+    #jam.reader .jpane { grid-template-rows: 1fr; }
+    #jam.reader .rdlink { display: inline-block; }
+  }
   /* reader: one instrument, full width (opened from a share link, e.g. on a phone) */
   #jam:not(.reader) .ronly { display: none; }
   #jam.reader .jonly, #jam.reader .jpane:nth-child(2) { display: none; }
@@ -335,6 +343,7 @@
     <select id="jamA" aria-label="Left instrument"></select>
     <select id="jamB" class="jonly" aria-label="Right instrument"></select>
     <span class="sp"></span>
+    <button type="button" class="jlink rdlink" data-k="A" title="Copy a link to this view">Link</button>
     <button id="jamMinus" type="button" aria-label="Smaller text">A−</button>
     <button id="jamPlus" type="button" aria-label="Larger text">A+</button>
     <button id="jamClose" type="button"><span class="jonly">Close ✕</span><span class="ronly">Back</span></button>
