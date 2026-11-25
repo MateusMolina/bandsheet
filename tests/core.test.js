@@ -328,3 +328,16 @@ test('editor helpers: lineKinds mirrors the parser and flags invisible character
   assert.equal(T.stripInvisible('a\u200bb\u00a0c'), 'ab c');
   assert.equal(T.lineKinds('')[0].kind, 'blank');
 });
+
+test('share links round-trip the config and parse their hash', async () => {
+  const st = { songs: [{ text: 'C  G\nhéllo ♯ wörld\n'.repeat(50), title: 'T', artist: 'A', base: { shape: '', capo: 2, key: '' }, instruments: [inst({ id: 1, name: 'vox' })], junk: 1 }],
+    cur: 0, collapse: false, notes: true, maxFont: 9.5, minFont: 7.5, layout: 'auto', printAll: false, view: 'sheets', jamA: 5 };
+  const snap = T.shareSnapshot(st);
+  assert.equal(snap.jamA, undefined);
+  const enc = await T.encodeShare(snap);
+  assert.match(enc, /^[zr][A-Za-z0-9_-]+$/);
+  assert.deepEqual(await T.decodeShare(enc), JSON.parse(JSON.stringify(snap)));
+  const h = T.buildHash({ s: enc, v: 'read', n: 2, i: 'guitar 1' });
+  assert.deepEqual(T.parseHash('#' + h), { s: enc, v: 'read', n: 2, i: 'guitar 1' });
+  assert.deepEqual(T.parseHash(''), { s: null, v: null, n: null, i: null });
+});

@@ -169,6 +169,11 @@
   .jl em { color: var(--mute); font-style: normal; }
   .jl.jn { color: var(--mute); }
   body.jamming { overflow: hidden; }
+  .jlink { float: right; font-size: 12px; padding: 2px 8px; }
+  /* reader: one instrument, full width (opened from a share link, e.g. on a phone) */
+  #jam:not(.reader) .ronly { display: none; }
+  #jam.reader .jonly, #jam.reader .jpane:nth-child(2) { display: none; }
+  #jam.reader .jpanes { grid-template-columns: 1fr; grid-template-rows: 1fr; }
 
   @media print {
     @page { size: A4 landscape; margin: 0; }
@@ -192,6 +197,7 @@
 <header><h1>tabsprint</h1><span>Paste a tab → set up each instrument against it → print as an A4 booklet</span>
   <button id="exportCfg" type="button" class="small" title="Download everything (settings, tabs, instruments) as a .json file, e.g. to attach to a bug report">Export config</button>
   <button id="importCfg" type="button" class="small" title="Load a config file exported from this app">Import config</button>
+  <button id="shareLink" type="button" class="small" title="Copy a link that contains everything (tabs, instruments, options). Open it anywhere; nothing is uploaded">Copy link</button>
   <input type="file" id="importFile" accept=".json,application/json" hidden>
   <label class="modechk" title="Several songs, each with its own instrument setup, printed in one booklet per instrument"><input type="checkbox" id="modeSet"> Setlist mode</label></header>
 <main>
@@ -278,20 +284,21 @@
 </div>
 <div id="jam" hidden>
   <div class="jbar">
-    <b>Jam mode</b>
+    <b class="jonly">Jam mode</b>
+    <select id="rdSong" class="ronly" aria-label="Song"></select>
     <select id="jamA" aria-label="Left instrument"></select>
-    <select id="jamB" aria-label="Right instrument"></select>
+    <select id="jamB" class="jonly" aria-label="Right instrument"></select>
     <span class="sp"></span>
     <button id="jamMinus" type="button" aria-label="Smaller text">A−</button>
     <button id="jamPlus" type="button" aria-label="Larger text">A+</button>
-    <button id="jamClose" type="button">Close ✕</button>
+    <button id="jamClose" type="button"><span class="jonly">Close ✕</span><span class="ronly">Edit</span></button>
   </div>
   <div class="jpanes">
     <div class="jpane"><div class="jtitle" id="jtA"></div><div class="jscroll" id="jsA"></div></div>
     <div class="jpane"><div class="jtitle" id="jtB"></div><div class="jscroll" id="jsB"></div></div>
   </div>
 </div>
-<script src="tabsprint.js?v=091658716d"></script>
-<script src="app.js?v=5d68a5638a"></script>
+<script src="tabsprint.js?v=5afccc4c5b"></script>
+<script src="app.js?v=7688e28b40"></script>
 </body>
 </html>

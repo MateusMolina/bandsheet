@@ -712,13 +712,59 @@
     }).join('');
   }
 
+  // ───────────────────────────── share links ─────────────────────────────
+  // A permalink carries the whole config in the URL hash (never sent to a server, so the site stays static):
+  //   #s=<z|r><base64url>[&v=read&n=<song index>&i=<instrument name>]
+  // 'z' = deflate-raw compressed JSON, 'r' = plain JSON (browsers without CompressionStream).
+  const toB64u = (u8) => {
+    let bin = '';
+    for (let k = 0; k < u8.length; k += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(k, k + 0x8000));
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  };
+  const fromB64u = (s) => {
+    const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
+    const u8 = new Uint8Array(bin.length);
+    for (let k = 0; k < bin.length; k++) u8[k] = bin.charCodeAt(k);
+    return u8;
+  };
+  const pipeBytes = async (u8, stream) => new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(stream)).arrayBuffer());
+  /** The part of the app state worth sharing: songs (tabs, key/capo, instruments) and the print options; not UI state. */
+  function shareSnapshot(st) {
+    const o = { songs: st.songs.map((sg) => ({ text: sg.text, title: sg.title, artist: sg.artist, base: sg.base, instruments: sg.instruments })) };
+    for (const k of ['cur', 'collapse', 'notes', 'maxFont', 'minFont', 'layout', 'printAll', 'view']) o[k] = st[k];
+    return o;
+  }
+  async function encodeShare(obj) {
+    const raw = new TextEncoder().encode(JSON.stringify(obj));
+    if (typeof CompressionStream === 'undefined') return 'r' + toB64u(raw);
+    return 'z' + toB64u(await pipeBytes(raw, new CompressionStream('deflate-raw')));
+  }
+  async function decodeShare(str) {
+    const kind = str[0], bytes = fromB64u(str.slice(1));
+    const raw = kind === 'z' ? await pipeBytes(bytes, new DecompressionStream('deflate-raw')) : kind === 'r' ? bytes : null;
+    if (!raw) throw new Error('unknown link format');
+    return JSON.parse(new TextDecoder().decode(raw));
+  }
+  /** '#s=…&v=read&n=0&i=vox' -> { s, v, n, i } (missing parts are null). */
+  function parseHash(hash) {
+    const q = new URLSearchParams(String(hash || '').replace(/^#/, ''));
+    return { s: q.get('s'), v: q.get('v'), n: q.has('n') ? +q.get('n') || 0 : null, i: q.get('i') };
+  }
+  function buildHash({ s, v, n, i }) {
+    const q = new URLSearchParams();
+    if (s) q.set('s', s);
+    if (v) { q.set('v', v); q.set('n', String(n || 0)); if (i) q.set('i', i); }
+    return q.toString();
+  }
+
   const api = {
     // chords
     isChord, parseChordToken, transposeToken, transposeChord, shapeShift, parseTuning, tuningOffset, TUNINGS, NOTE_NAMES,
     // parsing / instruments
     parse, chordSegments, lineKinds, countOdd, stripInvisible, detectKey, applyInstrument, resolveBaseline, resolveInstrument, describe,
     // layout / output
-    bookletOrder, flatOrder, renderInstrument, renderBook, jamHtml, layout, constants: { SHEET_W, SHEET_H, PW, PH, MAX_SIZE },
+    bookletOrder, flatOrder, renderInstrument, renderBook, jamHtml,
+    shareSnapshot, encodeShare, decodeShare, parseHash, buildHash, layout, constants: { SHEET_W, SHEET_H, PW, PH, MAX_SIZE },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TabsPrint = api;

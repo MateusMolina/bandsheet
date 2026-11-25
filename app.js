@@ -657,6 +657,7 @@ Light the way back home (x2)
     if (!ids.includes(state.jamB) || state.jamB === state.jamA) state.jamB = ids.find((x) => x !== state.jamA);
   }
   function renderJam() {
+    if (reading) return renderReader();
     jamPick();
     const { s, base, res } = setup();
     const opts = cur().instruments.map((i) => [i.id, i.name.trim() || 'instrument']);
@@ -666,7 +667,7 @@ Light the way back home (x2)
       const inst = cur().instruments.find((i) => i.id === id);
       const r0 = res.get(inst.id);
       const secs = T.applyInstrument(s, inst, r0.shift, state.collapse);
-      $('jt' + k).innerHTML = `<b>${esc(inst.name.trim() || 'instrument')}</b><div>${esc(T.describe(inst, r0, base))}</div>`;
+      $('jt' + k).innerHTML = `<button type="button" class="jlink small" data-k="${k}" title="Copy a link that opens only this instrument (for a phone)">Link</button><b>${esc(inst.name.trim() || 'instrument')}</b><div>${esc(T.describe(inst, r0, base))}</div>`;
       jam[k].innerHTML = T.jamHtml(secs);
       jam[k].scrollTop = 0;
     }
@@ -701,7 +702,62 @@ Light the way back home (x2)
     }, { passive: true });
   }
   function openJam() { $('jam').hidden = false; document.body.classList.add('jamming'); renderJam(); }
-  function closeJam() { $('jam').hidden = true; document.body.classList.remove('jamming'); }
+  function closeJam() {
+    $('jam').hidden = true; $('jam').classList.remove('reader'); document.body.classList.remove('jamming');
+    if (reading) { reading = false; setHash({}); }
+  }
+
+  // ── reader: ONE instrument, full width (what a share link opens; made for phones) ──
+  let reading = false;
+  const norm = (n) => (n || '').trim().toLowerCase() || 'instrument';
+  function renderReader() {
+    const song = cur();
+    if (!song.instruments.some((i) => i.id === state.jamA)) state.jamA = song.instruments[0].id;
+    const inst = song.instruments.find((i) => i.id === state.jamA);
+    const { s, base, res } = setup();
+    const r0 = res.get(inst.id);
+    $('rdSong').hidden = state.songs.length < 2;
+    $('rdSong').innerHTML = state.songs.map((sg, n) => `<option value="${n}"${n === state.cur ? ' selected' : ''}>${esc(sg.title.trim() || 'Song ' + (n + 1))}</option>`).join('');
+    $('jamA').innerHTML = song.instruments.map((i) => `<option value="${i.id}"${i.id === inst.id ? ' selected' : ''}>${esc(i.name.trim() || 'instrument')}</option>`).join('');
+    $('jtA').innerHTML = `<button type="button" class="jlink small" data-k="A" title="Copy a link to this view">Link</button><b>${esc(song.title.trim() || 'Untitled')}</b> · ${esc(inst.name.trim() || 'instrument')}<div>${esc(T.describe(inst, r0, base))}</div>`;
+    jam.A.innerHTML = T.jamHtml(T.applyInstrument(s, inst, r0.shift, state.collapse));
+    jam.A.scrollTop = 0;
+    $('jam').style.setProperty('--jf', state.jamFont + 'px');
+    setHash({ v: 'read', n: state.cur, i: inst.name.trim() });
+  }
+  function openReader(n, name) {
+    state.cur = Math.max(0, Math.min(state.songs.length - 1, n || 0));
+    const song = cur();
+    state.jamA = (song.instruments.find((i) => norm(i.name) === norm(name)) || song.instruments[0]).id;
+    loadInputs(); render();
+    reading = true; $('jam').classList.add('reader'); openJam();
+  }
+  /** Keep the address bar in step with the view (without the big #s= payload: the state lives in localStorage by then). */
+  function setHash(h) { try { history.replaceState(null, '', location.pathname + location.search + (h.v ? '#' + T.buildHash(h) : '')); } catch (e) { /* ignore */ } }
+  $('rdSong').addEventListener('change', (e) => {
+    const name = (cur().instruments.find((i) => i.id === state.jamA) || {}).name;
+    state.cur = +e.target.value; const song = cur();
+    state.jamA = (song.instruments.find((i) => norm(i.name) === norm(name)) || song.instruments[0]).id;
+    loadInputs(); render(); save(); renderJam();
+  });
+
+  // ── share links: everything in the URL hash (static site, nothing uploaded) ──
+  async function copyLink(btn, view) {
+    const label = btn.textContent;
+    const flash = (t) => { btn.textContent = t; setTimeout(() => { btn.textContent = label; }, 2200); };
+    const hash = T.buildHash(Object.assign({ s: await T.encodeShare(T.shareSnapshot(state)) }, view || {}));
+    const url = location.href.split('#')[0] + '#' + hash;
+    const kb = Math.round(url.length / 1024);
+    try { await navigator.clipboard.writeText(url); flash(kb >= 8 ? `Copied (long: ${kb} KB)` : 'Copied ✓'); }
+    catch (e) { window.prompt('Copy this link:', url); }
+  }
+  $('shareLink').addEventListener('click', (e) => copyLink(e.currentTarget));
+  $('jam').addEventListener('click', (e) => {
+    const b = e.target.closest('.jlink');
+    if (!b) return;
+    const inst = cur().instruments.find((i) => i.id === (b.dataset.k === 'A' ? state.jamA : state.jamB));
+    if (inst) copyLink(b, { v: 'read', n: state.cur, i: inst.name.trim() });
+  });
   $('jamOpen').addEventListener('click', openJam);
   $('jamClose').addEventListener('click', closeJam);
   document.addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; if (!$('editor').hidden) closeEditor(); else if (!$('jam').hidden) closeJam(); });
@@ -713,8 +769,26 @@ Light the way back home (x2)
 
   // ── init ──
   load();
-  $('layout').value = state.layout; $('printAll').checked = !!state.printAll;
-  $('collapse').checked = state.collapse; $('notes').checked = state.notes; $('maxFont').value = state.maxFont; $('minFont').value = state.minFont;
-  loadInputs();
-  render();
+  const hasWork = () => state.songs.some((sg) => sg.text.trim() && sg.text.trim() !== EXAMPLE.trim());
+  async function openSharedLink(h) {
+    try {
+      const snap = await T.decodeShare(h.s);
+      const same = hasWork() && JSON.stringify(snap.songs.map((x) => x.text)) === JSON.stringify(state.songs.map((x) => x.text));
+      if (hasWork() && !same && !confirm('Open this shared link? It replaces the tabs currently saved in this browser.')) return false;
+      if (!applyState(snap)) throw new Error('no songs found');
+      save();
+      return true;
+    } catch (err) { alert('This link could not be opened (' + err.message + ').'); return false; }
+  }
+  (async () => {
+    const h = T.parseHash(location.hash);
+    let ok = true;
+    if (h.s) { ok = await openSharedLink(h); if (!ok) setHash({}); }
+    $('layout').value = state.layout; $('printAll').checked = !!state.printAll;
+    $('collapse').checked = state.collapse; $('notes').checked = state.notes; $('maxFont').value = state.maxFont; $('minFont').value = state.minFont;
+    loadInputs();
+    render();
+    if (ok && h.v === 'read') openReader(h.n, h.i);
+    else if (h.s) setHash({});
+  })();
 })();

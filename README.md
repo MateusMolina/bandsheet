@@ -52,6 +52,11 @@ Vocabulary: **shape** = the chord shapes being fingered (named like a key: "A sh
    Tools: *Clean invisible characters*, *Trim line ends*, *Collapse blank lines*, *Remove common indent*. They keep the browser's
    normal undo (⌘Z / Ctrl+Z). Esc or *Done* closes it.
 
+10. **Copy link** (header): copies a permalink with *everything* (songs, tabs, instruments, options) in the URL hash, so the site stays static and nothing
+    is uploaded. Open it in any browser to get the same setup (if the browser already holds other tabs, it asks before replacing them). It is a
+    snapshot, not live sync: edit, then share a new link. A warning shows when a link is long (8 KB+). In **Jam mode**, each pane has a **Link** button
+    that copies a link opening **only that instrument**, full width, made for a phone (song picker if the setlist has several; *Edit* leaves the reader).
+
 Settings persist in the browser's localStorage.
 
 ## What the parser understands
