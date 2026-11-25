@@ -376,11 +376,10 @@ Light the way back home (x2)
           ? `<span class="pgrange" title="pages in the ${esc(act.book.name)} booklet">p.${rg.from}${rg.to > rg.from ? '–' + rg.to : ''}</span>`
           : `<span class="pgrange none" title="this song has no instrument called ${esc(act.book.name)}">–</span>`;
         const a = infos[i].s.sections.length ? infos[i].meta.artist : '';
-        return `<div class="song${i === state.cur ? ' sel' : ''}" data-i="${i}"><div class="top"><span class="n">${i + 1}</span><span class="t">${esc(t)}</span></div>` +
-          `<div class="a">${esc(a || '')}</div><div class="bot">${pages}` +
-          `<span class="sb"><button type="button" data-act="up" title="Move up"${i === 0 ? ' disabled' : ''}>↑</button>` +
-          `<button type="button" data-act="down" title="Move down"${i === state.songs.length - 1 ? ' disabled' : ''}>↓</button>` +
-          `<button type="button" data-act="del" title="Remove song"${state.songs.length === 1 ? ' disabled' : ''}>×</button></span></div></div>`;
+        const ctl = i !== state.cur ? '' : `<span class="sb"><button type="button" data-act="up" title="Move left"${i === 0 ? ' disabled' : ''}>←</button>` +
+          `<button type="button" data-act="down" title="Move right"${i === state.songs.length - 1 ? ' disabled' : ''}>→</button>` +
+          `<button type="button" data-act="del" title="Remove song"${state.songs.length === 1 ? ' disabled' : ''}>×</button></span>`;
+        return `<div class="song${i === state.cur ? ' sel' : ''}" data-i="${i}" title="${esc(t + (a ? ' — ' + a : ''))}"><span class="n">${i + 1}</span><span class="t">${esc(t)}</span>${pages}${ctl}</div>`;
       }).join('');
     }
     $('jamOpen').disabled = song.instruments.length < 2;

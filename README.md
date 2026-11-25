@@ -34,11 +34,11 @@ Vocabulary: **shape** = the chord shapes being fingered (named like a key: "A sh
 4. **Jam mode** (needs 2+ instruments): splits the screen in two, one instrument per half, scrolling together. Panes are aligned
    by song section, so a lyrics-only pane stays level with a chord pane even though their lengths differ. Esc closes it; A−/A+ resize the text.
 
-5. **Setlist** (the row of song cards at the top; there is always one, with one song to start): each song is a **card** with its own baseline tab,
-   key/capo and **its own instrument setup**; click a card to edit that song's tab and instruments below, **+ Song** adds one (it starts with
-   the current song's instruments, so you only change what differs), ↑ ↓ reorder and × remove. One booklet is made per instrument *name*
+5. **Setlist** (the row of song tabs at the top; there is always one, with one song to start): each song is a **tab** with its own baseline tab,
+   key/capo and **its own instrument setup**; click a tab to edit that song's tab and instruments below, **+ Song** adds one (it starts with
+   the current song's instruments, so you only change what differs), ← → reorder and × remove (on the selected tab). One booklet is made per instrument *name*
    (`guitar1`, `vox`…): it holds, in setlist order, every song that has an instrument of that name, each starting on a new page with its own
-   title block and continuous page numbers. Each card shows the song's pages in the selected instrument's booklet (a dash if the song has no
+   title block and continuous page numbers. Each tab shows the song's pages in the selected instrument's booklet (a dash if the song has no
    instrument of that name); the print view's jump menu goes to a song in the preview. Renaming an instrument renames it in every song (so it
    stays one booklet); tuning, capo and shape stay per song. The whole book is imposed together, so it needs only as many sheets as the total
    page count requires. Jam mode, the reader link and the instrument cards act on the currently selected song.
