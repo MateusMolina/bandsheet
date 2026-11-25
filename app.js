@@ -64,7 +64,6 @@ Light the way back home (x2)
   });
 
   const state = {
-    mode: 'single',            // 'single' = one song (the default); 'setlist' = several songs in one booklet per instrument
     songs: [newSong()], cur: 0, activeKey: null,
     collapse: false, notes: true, maxFont: 9.5, minFont: 7.5, layout: 'auto', printAll: false,
     editorPreview: true,       // the large editor shows a live preview next to the text
@@ -72,8 +71,8 @@ Light the way back home (x2)
     jamA: null, jamB: null, jamFont: 15,
   };
   const cur = () => state.songs[state.cur];
-  /** Which booklet an instrument card stands for: by id in single mode, by (case-insensitive) name in setlist mode. */
-  const instKey = (i) => (state.mode === 'setlist' ? 'n:' + (i.name.trim() || 'instrument').toLowerCase() : 'i' + i.id);
+  /** Which booklet an instrument card stands for: its (case-insensitive) name, shared by every song that has such an instrument. */
+  const instKey = (i) => 'n:' + (i.name.trim() || 'instrument').toLowerCase();
 
   // Only data saved in the old format (instrument.key = what is now "shape") needs migrating.
   function normInstrument(i) {
@@ -91,7 +90,7 @@ Light the way back home (x2)
       songs = [{ text: s.text, title: s.title, artist: s.artist, base: s.base, instruments: s.instruments, baseKey: s.baseKey }];
       if (s.active) state.activeKey = 'i' + s.active;
     } else return false;
-    for (const k of ['mode', 'collapse', 'notes', 'maxFont', 'minFont', 'layout', 'printAll', 'view', 'editorPreview', 'jamA', 'jamB', 'jamFont', 'activeKey']) if (k in s) state[k] = s[k];
+    for (const k of ['collapse', 'notes', 'maxFont', 'minFont', 'layout', 'printAll', 'view', 'editorPreview', 'jamA', 'jamB', 'jamFont', 'activeKey']) if (k in s) state[k] = s[k];
     state.songs = songs.map((sg, n) => {
       const base = Object.assign({ shape: '', capo: 0, key: '' }, sg.base || {});
       if (sg.baseKey) base.shape = sg.baseKey;
@@ -185,11 +184,11 @@ Light the way back home (x2)
     if (f !== 'name') selectCard(card);      // changing a card's settings selects it (a rename keeps the selection, below)
     if (f === 'name') {
       const was = instKey(i);
-      // In a setlist an instrument is the same instrument in every song when the name matches, so a rename applies to all of
+      // An instrument is the same instrument in every song when the name matches, so a rename applies to all of
       // them (otherwise it would split off a new booklet). Everything else on a card stays per song. Runs on every keystroke,
       // so it matches on the previous name, which all songs share, even if the field is momentarily empty.
       const toVocal = !VOCAL_NAME_RE.test(i.name.trim()) && VOCAL_NAME_RE.test(v.trim());   // only when it *becomes* a vocal name
-      if (state.mode === 'setlist') for (const sg of state.songs) if (sg !== cur()) for (const x of sg.instruments) if (instKey(x) === was) { x.name = v; if (toVocal) x.chords = false; }
+      for (const sg of state.songs) if (sg !== cur()) for (const x of sg.instruments) if (instKey(x) === was) { x.name = v; if (toVocal) x.chords = false; }
       i.name = v;
       if (toVocal && i.chords) { i.chords = false; card.querySelector('[data-f=lyricsOnly]').checked = true; syncCards(); }
       if (state.activeKey === was) state.activeKey = instKey(i);   // the selection follows a rename
@@ -242,16 +241,14 @@ Light the way back home (x2)
 
   function render() {
     save();
-    const setlist = state.mode === 'setlist';
+    const multi = state.songs.length > 1;
     const mine = setup();
     const { s, det, base, res } = mine;
     const song = cur();
-    const infos = setlist ? state.songs.map((sg) => (sg === song ? mine : infoOf(sg))) : [mine];
+    const infos = state.songs.map((sg) => (sg === song ? mine : infoOf(sg)));
 
     // mode chrome
-    $('modeSet').checked = setlist;
-    $('setlistBox').hidden = !setlist;
-    $('baseHead').textContent = setlist ? `Song ${state.cur + 1} — baseline tab` : 'Baseline tab';
+    $('baseHead').textContent = multi ? `Song ${state.cur + 1} — baseline tab` : 'Baseline tab';
 
     // baseline controls: shape + capo -> key, or key -> capo
     $('baseShape').innerHTML = noteOptions(song.base.shape, `Auto${det ? ` (detected: ${det.name}${det.minor ? ' minor' : ''})` : ''}`);
@@ -290,21 +287,17 @@ Light the way back home (x2)
         ` · ${r0.shift ? `chords shift <b>${r0.shift > 0 ? '+' : ''}${r0.shift}</b> from the tab` : 'chords as in the tab'}`;
     }
 
-    // books: single mode = one per instrument of this song; setlist = one per instrument *name*, spanning all songs
+    // books: one per instrument *name*, spanning all songs that have an instrument of that name
     const books = [];
-    if (!setlist) {
-      for (const inst of song.instruments) books.push({ key: 'i' + inst.id, name: inst.name.trim() || 'instrument', items: [{ info: mine, inst, si: 0 }] });
-    } else {
-      const byKey = new Map();
-      infos.forEach((info, si) => {
-        for (const inst of info.song.instruments) {
-          const nm = inst.name.trim() || 'instrument';
-          const k = 'n:' + nm.toLowerCase();
-          if (!byKey.has(k)) { const b = { key: k, name: nm, items: [] }; byKey.set(k, b); books.push(b); }
-          byKey.get(k).items.push({ info, inst, si });
-        }
-      });
-    }
+    const byKey = new Map();
+    infos.forEach((info, si) => {
+      for (const inst of info.song.instruments) {
+        const nm = inst.name.trim() || 'instrument';
+        const k = 'n:' + nm.toLowerCase();
+        if (!byKey.has(k)) { const b = { key: k, name: nm, items: [] }; byKey.set(k, b); books.push(b); }
+        byKey.get(k).items.push({ info, inst, si });
+      }
+    });
     const opts = { maxSize: state.maxFont, minSize: state.minFont, layout: state.layout };
     const results = books.map((book) => {
       const items = book.items.filter((it) => it.info.s.sections.length);
@@ -362,28 +355,30 @@ Light the way back home (x2)
     const bySong = new Map();
     if (act) act.items.forEach((it, k) => bySong.set(it.si, act.r.ranges[k]));
     lastBySong = bySong;
-    if (setlist) {
-      // the song list doubles as the table of contents: each song shows its pages in the active instrument's booklet
+    {
+      // the song cards double as the table of contents: each song shows its pages in the active instrument's booklet
       $('songs').innerHTML = state.songs.map((sg, i) => {
         const t = infos[i].s.sections.length ? infos[i].meta.title : (sg.text.trim() ? 'Untitled' : 'Empty song');
         const rg = bySong.get(i);
         const pages = !act || !hasContent ? '' : rg
           ? `<span class="pgrange" title="pages in the ${esc(act.book.name)} booklet">p.${rg.from}${rg.to > rg.from ? '–' + rg.to : ''}</span>`
           : `<span class="pgrange none" title="this song has no instrument called ${esc(act.book.name)}">–</span>`;
-        return `<div class="song${i === state.cur ? ' sel' : ''}" data-i="${i}"><span class="n">${i + 1}</span><span class="t">${esc(t)}</span>${pages}` +
+        const a = infos[i].s.sections.length ? infos[i].meta.artist : '';
+        return `<div class="song${i === state.cur ? ' sel' : ''}" data-i="${i}"><div class="top"><span class="n">${i + 1}</span><span class="t">${esc(t)}</span></div>` +
+          `<div class="a">${esc(a || '')}</div><div class="bot">${pages}` +
           `<span class="sb"><button type="button" data-act="up" title="Move up"${i === 0 ? ' disabled' : ''}>↑</button>` +
           `<button type="button" data-act="down" title="Move down"${i === state.songs.length - 1 ? ' disabled' : ''}>↓</button>` +
-          `<button type="button" data-act="del" title="Remove song"${state.songs.length === 1 ? ' disabled' : ''}>×</button></span></div>`;
+          `<button type="button" data-act="del" title="Remove song"${state.songs.length === 1 ? ' disabled' : ''}>×</button></span></div></div>`;
       }).join('');
     }
     $('jamOpen').disabled = song.instruments.length < 2;
     $('jamOpen').title = song.instruments.length < 2 ? 'Add a second instrument to use jam mode' : 'Show two instruments of this song side by side, scrolling together';
-    document.title = hasContent ? `${setlist ? 'Setlist' : mine.meta.title}${state.printAll || !act ? '' : ' - ' + act.book.name}` : 'tabsprint';
-    // print view header: which booklet, and (setlist) jump to a song in it
+    document.title = hasContent ? `${multi ? 'Setlist' : mine.meta.title}${state.printAll || !act ? '' : ' - ' + act.book.name}` : 'tabsprint';
+    // print view header: which booklet, and (several songs) jump to a song in it
     $('pvInst').innerHTML = results.map((x) => `<option value="${esc(x.book.key)}"${x.book.key === state.activeKey ? ' selected' : ''}>${esc(x.book.name)}</option>`).join('');
     $('pvInfo').textContent = $('info').textContent;
-    $('pvSong').hidden = !setlist;
-    if (setlist) $('pvSong').innerHTML = state.songs.map((sg, i) => {
+    $('pvSong').hidden = !multi;
+    if (multi) $('pvSong').innerHTML = state.songs.map((sg, i) => {
       const rg = bySong.get(i);
       return `<option value="${i}">${esc(infos[i].s.sections.length ? infos[i].meta.title : 'Song ' + (i + 1))}${rg ? ` · p.${rg.from}${rg.to > rg.from ? '–' + rg.to : ''}` : ''}</option>`;
     }).join('');
@@ -449,7 +444,7 @@ Light the way back home (x2)
     if (!row) return;
     const i = +row.dataset.i;
     const act = e.target.closest('button[data-act]');
-    if (!act) { if (i !== state.cur) selectSong(i); else jumpToSong(i); return; }   // clicking the selected song jumps to it again
+    if (!act) { if (i !== state.cur) selectSong(i); return; }
     const a = act.dataset.act;
     const keep = cur();
     if (a === 'up' || a === 'down') {
@@ -476,7 +471,6 @@ Light the way back home (x2)
     loadInputs(); render();
     $('src').focus();
   });
-  $('modeSet').addEventListener('change', (e) => { state.mode = e.target.checked ? 'setlist' : 'single'; pendingScroll = true; render(); });
 
   $('view').addEventListener('change', (e) => { state.view = e.target.value; render(); });
 

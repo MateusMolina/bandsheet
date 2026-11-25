@@ -29,18 +29,19 @@ Vocabulary: **shape** = the chord shapes being fingered (named like a key: "A sh
 4. **Jam mode** (needs 2+ instruments): splits the screen in two, one instrument per half, scrolling together. Panes are aligned
    by song section, so a lyrics-only pane stays level with a chord pane even though their lengths differ. Esc closes it; A−/A+ resize the text.
 
-5. **Setlist mode** (checkbox, top right; off by default, so everything above works as before): keep several songs, each with its own
-   baseline tab, key/capo and **its own instrument setup**. One booklet is made per instrument *name* (`guitar1`, `vox`…): it holds,
-   in setlist order, every song that has an instrument of that name, each starting on a new page with its own title block and
-   continuous page numbers. The song list shows each song's pages in the selected instrument's booklet (a dash if the song has no
-   instrument of that name); clicking a song selects it (the print view's jump menu goes to it in the preview). "+ Add song" copies the current song's instruments so you only change what differs. Renaming an instrument renames it in every song (so it stays one booklet); tuning, capo and shape stay per song. Print / all-instruments work as in
-   single mode, and the whole book is imposed together, so it needs only as many sheets as the total page count requires.
-   Jam mode and the cards always act on the currently selected song.
+5. **Setlist** (the row of song cards at the top; there is always one, with one song to start): each song is a **card** with its own baseline tab,
+   key/capo and **its own instrument setup**; click a card to edit that song's tab and instruments below, **+ Song** adds one (it starts with
+   the current song's instruments, so you only change what differs), ↑ ↓ reorder and × remove. One booklet is made per instrument *name*
+   (`guitar1`, `vox`…): it holds, in setlist order, every song that has an instrument of that name, each starting on a new page with its own
+   title block and continuous page numbers. Each card shows the song's pages in the selected instrument's booklet (a dash if the song has no
+   instrument of that name); the print view's jump menu goes to a song in the preview. Renaming an instrument renames it in every song (so it
+   stays one booklet); tuning, capo and shape stay per song. The whole book is imposed together, so it needs only as many sheets as the total
+   page count requires. Jam mode, the reader link and the instrument cards act on the currently selected song.
 
 6. **View** (print view, preview only): *Printed sheets* shows exactly what prints. For a booklet that means pages **imposed for folding**, so a
    sheet's pages are not in reading order, e.g. the front of sheet 1 of a 4-page book is `pages 4 | 1` (page 4 is the back cover). Every
    caption states its pages. *Reading order* shows the same pages as a book (1 | 2, 3 | 4 …). Printing is always the imposed version.
-7. **Export config / Import config** (header): downloads everything (mode, songs with their tabs, key/capo, instruments, options, view)
+7. **Export config / Import config** (header): downloads everything (songs with their tabs, key/capo, instruments, options, view)
    plus the browser details and what the app computed from it (pages, sheets, per-song page ranges) as one `.json` file. Attach it to a
    bug report; Import loads it back (also on another machine) to reproduce exactly what you saw. Note that it contains the tab text you pasted.
 
