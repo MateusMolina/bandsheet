@@ -379,6 +379,14 @@ Light the way back home (x2)
     $('jamOpen').disabled = song.instruments.length < 2;
     $('jamOpen').title = song.instruments.length < 2 ? 'Add a second instrument to use jam mode' : 'Show two instruments of this song side by side, scrolling together';
     document.title = hasContent ? `${setlist ? 'Setlist' : mine.meta.title}${state.printAll || !act ? '' : ' - ' + act.book.name}` : 'tabsprint';
+    // print view header: which booklet, and (setlist) jump to a song in it
+    $('pvInst').innerHTML = results.map((x) => `<option value="${esc(x.book.key)}"${x.book.key === state.activeKey ? ' selected' : ''}>${esc(x.book.name)}</option>`).join('');
+    $('pvInfo').textContent = $('info').textContent;
+    $('pvSong').hidden = !setlist;
+    if (setlist) $('pvSong').innerHTML = state.songs.map((sg, i) => {
+      const rg = bySong.get(i);
+      return `<option value="${i}">${esc(infos[i].s.sections.length ? infos[i].meta.title : 'Song ' + (i + 1))}${rg ? ` · p.${rg.from}${rg.to > rg.from ? '–' + rg.to : ''}` : ''}</option>`;
+    }).join('');
     fitPreview();
     if (pendingScroll) { pendingScroll = false; jumpToSong(state.cur); }
   }
@@ -387,19 +395,14 @@ Light the way back home (x2)
     const read = state.view === 'read';
     const sh = $('sheets').querySelectorAll(`.grp.active ${read ? '.v-read' : '.v-print'} .sheet`)[read ? readSide : side];
     if (!sh) return;
-    const target = sh.previousElementSibling || sh;
-    target.scrollIntoView({ block: 'start' });
-    // The instruments bar is frozen at the top, so the target must land just below it, not under it. Measure where it actually
-    // ended up and correct (robust against zoom/scroll-margin differences between browsers; no-op if the page can't scroll further).
-    const want = $('cardrow').getBoundingClientRect().bottom + 8;
-    const off = target.getBoundingClientRect().top - want;
-    if (Math.abs(off) > 0.5) window.scrollBy(0, off);
+    (sh.previousElementSibling || sh).scrollIntoView({ block: 'start' });
   }
   /** Scroll the preview to where song i starts in the active instrument's booklet. */
-  function jumpToSong(i) { const rg = lastBySong.get(i); if (rg) scrollToSide(rg.side, rg.readSide); }
+  function jumpToSong(i) { if ($('printview').hidden) return; const rg = lastBySong.get(i); if (rg) scrollToSide(rg.side, rg.readSide); }
 
   function fitPreview() {
-    const avail = $('sheets').parentElement.clientWidth;
+    const avail = $('pmain').clientWidth - 24;   // minus its padding; 0 while the print view is closed
+    if (avail <= 0) return;
     const w = 841.89 * (96 / 72);
     $('sheets').style.zoom = Math.min(1, avail / w).toFixed(3);
   }
@@ -426,6 +429,12 @@ Light the way back home (x2)
 
   // Print just prints what the page already shows (active instrument, or all when the box is ticked).
   $('printOne').addEventListener('click', () => window.print());
+  function openPrint() { $('printview').hidden = false; document.body.classList.add('printing'); fitPreview(); jumpToSong(state.cur); }
+  function closePrint() { $('printview').hidden = true; document.body.classList.remove('printing'); }
+  $('printOpen').addEventListener('click', openPrint);
+  $('printClose').addEventListener('click', closePrint);
+  $('pvInst').addEventListener('change', (e) => { state.activeKey = e.target.value; render(); });
+  $('pvSong').addEventListener('change', (e) => jumpToSong(+e.target.value));
   $('printAll').addEventListener('change', (e) => { state.printAll = e.target.checked; update(); });
 
   // ── setlist: song list ──
@@ -760,7 +769,7 @@ Light the way back home (x2)
   });
   $('jamOpen').addEventListener('click', openJam);
   $('jamClose').addEventListener('click', closeJam);
-  document.addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; if (!$('editor').hidden) closeEditor(); else if (!$('jam').hidden) closeJam(); });
+  document.addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; if (!$('editor').hidden) closeEditor(); else if (!$('jam').hidden) closeJam(); else if (!$('printview').hidden) closePrint(); });
   $('jamA').addEventListener('change', (e) => { state.jamA = +e.target.value; if (state.jamB === state.jamA) state.jamB = null; save(); renderJam(); });
   $('jamB').addEventListener('change', (e) => { state.jamB = +e.target.value; if (state.jamA === state.jamB) state.jamA = null; save(); renderJam(); });
   const jamFont = (d) => { state.jamFont = Math.max(10, Math.min(40, state.jamFont + d)); save(); $('jam').style.setProperty('--jf', state.jamFont + 'px'); };

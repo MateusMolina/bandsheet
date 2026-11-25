@@ -116,6 +116,19 @@
   .hd i { flex: 1; border-top: .4pt solid #999; }
   .fold { position: absolute; left: 420.945pt; top: 0; bottom: 0; border-left: .4pt dashed #999; }
 
+  /* ── print view: options + preview of the printed sheets ── */
+  #printview { position: fixed; inset: 0; z-index: 25; background: var(--bg); display: grid; grid-template-rows: auto 1fr; }
+  #printview[hidden] { display: none; }
+  .pbar { display: flex; gap: 12px; align-items: center; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .pbar select { width: auto; }
+  .pbar .sp { flex: 1; }
+  .pinfo { color: var(--mute); font-size: 13px; }
+  .pbody { display: grid; grid-template-columns: 320px minmax(0, 1fr); min-height: 0; }
+  .pside { overflow-y: auto; padding: 12px; border-right: 1px solid var(--line); }
+  .pmain { overflow: auto; padding: 12px; min-width: 0; }
+  @media (max-width: 900px) { .pbody { grid-template-columns: minmax(0, 1fr); overflow: auto; grid-template-rows: auto auto; } .pside { overflow: visible; border-right: 0; } .pmain { overflow: visible; } }
+  body.printing { overflow: hidden; }
+
   /* ── large tab editor ── */
   #editor { position: fixed; inset: 0; z-index: 30; background: var(--bg); display: grid; grid-template-rows: auto auto 1fr; }
   #editor[hidden] { display: none; }
@@ -178,8 +191,11 @@
   @media print {
     @page { size: A4 landscape; margin: 0; }
     html, body { background: #fff; }
-    body > header, #editor, #controls, #cardrow, #bar, #foldnote, #empty, .cap { display: none !important; }
-    main { display: block; padding: 0; }
+    body > header, main, #editor, #foldnote, .cap, .pbar, .pside { display: none !important; }
+    /* Ctrl+P prints the sheets even with the print view closed */
+    #printview, #printview[hidden] { display: block !important; position: static; background: none; }
+    .pbody { display: block; overflow: visible; }
+    .pmain { overflow: visible; padding: 0; }
     #sheets { zoom: 1 !important; }
     body[data-all] .grp { display: block; }  /* persistent setting, not toggled around print() */
     .noprint, #jam { display: none !important; }
@@ -225,7 +241,37 @@
       <div class="hint"><b>Shape</b>: the chord shapes as printed in the tab. <b>Key</b>: how the song sounds = shape + capo.
         Set the capo (key is computed) or set the key (capo is computed). <span id="baseNote"></span></div>
     </section>
-    <section class="box opts">
+  </div>
+  <div>
+    <div id="cardrow" aria-label="Instruments">
+      <div id="insts"></div>
+      <div id="ghosts"></div>
+      <div class="addcard"><button id="addInst" type="button" title="Add an instrument to this song">+ Instrument</button><button id="collapseAll" type="button" class="small" title="Collapse or expand every card to save space">Collapse all</button></div>
+    </div>
+    <div id="bar">
+      <div class="info" id="info"></div>
+      <button id="jamOpen" type="button" title="Show two instruments side by side, scrolling together">Jam mode</button>
+      <button id="printOpen" class="primary" type="button" title="Choose layout and font size, preview the sheets and print or save a PDF">Print…</button>
+    </div>
+    <div id="empty">Paste a tab on the left to get started.</div>
+  </div>
+</main>
+<div id="printview" hidden>
+  <div class="pbar">
+    <b>Print</b>
+    <select id="pvInst" aria-label="Instrument to print"></select>
+    <select id="pvSong" aria-label="Jump to song" hidden></select>
+    <label class="allchk" title="Preview only. Printing is always as the sheets are shown under 'Printed sheets'.">View
+      <select id="view" style="width:auto"><option value="sheets">Printed sheets</option><option value="read">Reading order</option></select></label>
+    <label class="allchk"><input type="checkbox" id="printAll"> all instruments in one PDF</label>
+    <span class="pinfo" id="pvInfo"></span>
+    <span class="sp"></span>
+    <button id="printOne" class="primary" type="button">Print / save PDF</button>
+    <button id="printClose" type="button">Close ✕</button>
+  </div>
+  <div class="pbody">
+    <aside class="pside">
+    <section class="box opts" id="pvOpts">
       <h2>Options</h2>
       <label><input type="checkbox" id="collapse"> Print repeated sections once ("as Chorus above")</label>
       <label><input type="checkbox" id="notes" checked> Show remarks from the source (capo hints…)</label>
@@ -241,28 +287,15 @@
       </div>
       <div class="hint">Text is sized to fit the width, between min and max; lines that don't fit at the minimum wrap.</div>
     </section>
-  </div>
-  <div>
-    <div id="cardrow" aria-label="Instruments">
-      <div id="insts"></div>
-      <div id="ghosts"></div>
-      <div class="addcard"><button id="addInst" type="button" title="Add an instrument to this song">+ Instrument</button><button id="collapseAll" type="button" class="small" title="Collapse or expand every card to save space">Collapse all</button></div>
+    </aside>
+    <div class="pmain" id="pmain">
+      <div id="foldnote" class="hint" hidden>Booklet sheets are shown the way they print: imposed for folding, so a sheet's pages are not in reading order
+        (e.g. <b>pages 4 | 1</b> on the front of sheet 1; page 4 is the back cover). Switch <b>View</b> to <i>Reading order</i> to see the pages as a book.</div>
+      <div id="sheets"></div>
+      <div class="hint noprint">Print: paper A4 <b>landscape</b>, scale 100%, margins none, headers/footers off. Booklets: <b>duplex, flip on the short edge</b>, fold along the dashed line. "Save as PDF" in the print dialog gives you a file.</div>
     </div>
-    <div id="bar">
-      <div class="info" id="info"></div>
-      <label class="allchk" title="Preview only. Printing is always as the sheets are shown under 'Printed sheets'.">View
-        <select id="view" style="width:auto"><option value="sheets">Printed sheets</option><option value="read">Reading order</option></select></label>
-      <button id="jamOpen" type="button" title="Show two instruments side by side, scrolling together">Jam mode</button>
-      <label class="allchk"><input type="checkbox" id="printAll"> all instruments in one PDF</label>
-      <button id="printOne" class="primary" type="button">Print / save PDF</button>
-    </div>
-    <div id="foldnote" class="hint" hidden>Booklet sheets are shown the way they print: imposed for folding, so a sheet's pages are not in reading order
-      (e.g. <b>pages 4 | 1</b> on the front of sheet 1; page 4 is the back cover). Switch <b>View</b> to <i>Reading order</i> to see the pages as a book.</div>
-    <div id="empty">Paste a tab on the left to see the booklet preview.</div>
-    <div id="sheets"></div>
-    <div class="hint noprint">Print: paper A4 <b>landscape</b>, scale 100%, margins none, headers/footers off. Booklets: <b>duplex, flip on the short edge</b>, fold along the dashed line. "Save as PDF" in the print dialog gives you a file.</div>
   </div>
-</main>
+</div>
 <div id="editor" hidden>
   <div class="ebar">
     <b id="etitle">Edit tab</b>
@@ -299,6 +332,6 @@
   </div>
 </div>
 <script src="tabsprint.js?v=5afccc4c5b"></script>
-<script src="app.js?v=7688e28b40"></script>
+<script src="app.js?v=60caee2e87"></script>
 </body>
 </html>

@@ -10,7 +10,7 @@ Vocabulary: **shape** = the chord shapes being fingered (named like a key: "A sh
 
 1. Paste the baseline tab. Its **shape** is auto-detected from the chords (editable). Then either set the tab's **capo**
    (the key is computed) or set the **key** directly (the capo is computed).
-2. Add instruments with **+ Instrument** in the bar above the preview. Each instrument is a **card** there; click a card (or focus or edit a field in it) to select it: the selected card is the one that is previewed and printed, and each card shows its page count. The bar is **frozen** at the top, so you can switch instruments while looking at any part of a song, and each card can be **collapsed** (▾) to a one-line summary, or all at once with *Collapse all*. Naming an instrument `vox`, `vocals`, `voice`, `singer` or `lyrics` turns on *Lyrics only* by itself; and clicking *Lyrics only* on a card that is not selected only selects it, so it isn't toggled by accident while switching. All of them play the same song, so each sounds in the song key; you fix one side and the other is computed:
+2. Add instruments with **+ Instrument** in the bar at the top of the right column. Each instrument is a **card** there; click a card (or focus or edit a field in it) to select it: the selected card is the one that is printed (and shown in the print view), and each card shows its page count. The bar stays at the top, and each card can be **collapsed** (▾) to a one-line summary, or all at once with *Collapse all*. Naming an instrument `vox`, `vocals`, `voice`, `singer` or `lyrics` turns on *Lyrics only* by itself; and clicking *Lyrics only* on a card that is not selected only selects it, so it isn't toggled by accident while switching. All of them play the same song, so each sounds in the song key; you fix one side and the other is computed:
    - **Lyrics only** — strips chords and tab (vocals).
    - **Tuning** — preset (standard, drop-d, dadgad, baritone-b, ukulele…) or notes like `B-E-A-D-F#-B`. A lower/higher tuning
      changes which shapes you need.
@@ -19,10 +19,12 @@ Vocabulary: **shape** = the chord shapes being fingered (named like a key: "A sh
      then shows the resulting key and its interval to the song key, such as "perfect 5th above the song key (+7, = perfect 4th below)".
    - The tab's chords are shifted from the tab's shape to the instrument's shape (columns stay aligned); each card shows the
      shape, capo, key and shift.
-3. Pick an instrument tab to preview it, then **Print / save PDF**. Tick *all instruments in one PDF* to print every one.
+3. **Print…** (button above the instruments, or Esc to leave) opens the **print view**: the printing options on the left (layout, font sizes,
+   repeated sections, remarks), a preview of the printed sheets on the right, the instrument to print (or tick *all instruments in one PDF*),
+   the *View* switch and, in a setlist, a jump-to-song menu. Then **Print / save PDF**; Ctrl/Cmd+P prints the same sheets.
    Layout is *Auto* by default: songs of 3+ pages become a saddle-stitch booklet (A4 landscape, two A5 pages per side,
    dashed fold line; print **duplex, flip on the short edge**, then fold). Songs of 1–2 pages are printed as plain pages
-   side by side, with no folding and no blank halves. You can force either layout in Options.
+   side by side, with no folding and no blank halves. You can force either layout in the print view.
    Print dialog: A4 landscape, 100% scale, no margins, no headers/footers. "Save as PDF" gives a file.
 4. **Jam mode** (needs 2+ instruments): splits the screen in two, one instrument per half, scrolling together. Panes are aligned
    by song section, so a lyrics-only pane stays level with a chord pane even though their lengths differ. Esc closes it; A−/A+ resize the text.
@@ -31,18 +33,18 @@ Vocabulary: **shape** = the chord shapes being fingered (named like a key: "A sh
    baseline tab, key/capo and **its own instrument setup**. One booklet is made per instrument *name* (`guitar1`, `vox`…): it holds,
    in setlist order, every song that has an instrument of that name, each starting on a new page with its own title block and
    continuous page numbers. The song list shows each song's pages in the selected instrument's booklet (a dash if the song has no
-   instrument of that name); clicking a song selects it and jumps the preview to it, and the left column stays in view while you scroll. "+ Add song" copies the current song's instruments so you only change what differs. Renaming an instrument renames it in every song (so it stays one booklet); tuning, capo and shape stay per song. Print / all-instruments work as in
+   instrument of that name); clicking a song selects it (the print view's jump menu goes to it in the preview). "+ Add song" copies the current song's instruments so you only change what differs. Renaming an instrument renames it in every song (so it stays one booklet); tuning, capo and shape stay per song. Print / all-instruments work as in
    single mode, and the whole book is imposed together, so it needs only as many sheets as the total page count requires.
    Jam mode and the cards always act on the currently selected song.
 
-6. **View** (preview only): *Printed sheets* shows exactly what prints. For a booklet that means pages **imposed for folding**, so a
+6. **View** (print view, preview only): *Printed sheets* shows exactly what prints. For a booklet that means pages **imposed for folding**, so a
    sheet's pages are not in reading order, e.g. the front of sheet 1 of a 4-page book is `pages 4 | 1` (page 4 is the back cover). Every
    caption states its pages. *Reading order* shows the same pages as a book (1 | 2, 3 | 4 …). Printing is always the imposed version.
 7. **Export config / Import config** (header): downloads everything (mode, songs with their tabs, key/capo, instruments, options, view)
    plus the browser details and what the app computed from it (pages, sheets, per-song page ranges) as one `.json` file. Attach it to a
    bug report; Import loads it back (also on another machine) to reproduce exactly what you saw. Note that it contains the tab text you pasted.
 
-8. **Font size** (Options): the text is sized so ~97% of the lines fit the page width, between a **max** (default 9.5pt) and a **min**
+8. **Font size** (Print view, left): the text is sized so ~97% of the lines fit the page width, between a **max** (default 9.5pt) and a **min**
    (default 7.5pt). At the minimum, lines that are still too wide **wrap** (chords stay above the right words) instead of shrinking the text
    further. Raise the min for readability, e.g. for a song with very long lines; lower it to squeeze more onto a page.
 
