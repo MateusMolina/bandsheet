@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const T = require('../tabsprint.js');
+const T = require('../bandsheet.js');
 
 const inst = (o) => Object.assign({ name: 'g', chords: true, tuning: 'standard', capo: '', shape: '' }, o);
 const segsOf = (r) => r.segs.map((g) => [g.c, g.t]);

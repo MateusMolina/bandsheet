@@ -1,7 +1,7 @@
 {
-  "name": "tabsprint",
+  "name": "bandsheet",
   "private": true,
-  "description": "Paste a chord sheet / tab, configure instruments against it, print per-instrument A4 booklets",
+  "description": "One setlist, a part for every player: paste chord sheets / tabs, configure each instrument against them, share a link or print booklets",
   "scripts": {
     "test": "node --test tests/",
     "stamp": "node scripts/stamp.js"

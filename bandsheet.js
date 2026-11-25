@@ -1,4 +1,4 @@
-/* tabsprint core: parse pasted chord sheets, apply per-instrument settings, lay out A5 pages,
+/* bandsheet core: parse pasted chord sheets, apply per-instrument settings, lay out A5 pages,
  * impose them as an A4-landscape booklet, and emit HTML sheets. No dependencies. */
 (function (root) {
   'use strict';
@@ -797,5 +797,5 @@
     shareSnapshot, encodeShare, decodeShare, parseHash, buildHash, layout, constants: { SHEET_W, SHEET_H, PW, PH, MAX_SIZE, A4_W, A4_H },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  else root.TabsPrint = api;
+  else root.Bandsheet = api;
 })(typeof window !== 'undefined' ? window : globalThis);

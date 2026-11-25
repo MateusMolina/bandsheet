@@ -1,9 +1,9 @@
 (function () {
   'use strict';
-  const T = window.TabsPrint;
+  const T = window.Bandsheet;
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  const STORE = 'tabsprint.v1';
+  const STORE = 'tabsprint.v1';   // the app used to be called tabsprint; the key stays so saved songs survive the rename
 
   const EXAMPLE = `Little Lantern
 by The Example Band
@@ -397,7 +397,7 @@ Light the way back home (x2)
     }
     $('jamOpen').disabled = song.instruments.length < 2;
     $('jamOpen').title = song.instruments.length < 2 ? 'Add a second instrument to use jam mode' : 'Show two instruments of this song side by side, scrolling together';
-    document.title = hasContent ? `${multi ? 'Setlist' : mine.meta.title}${state.printAll || !act ? '' : ' - ' + act.book.name}` : 'tabsprint';
+    document.title = hasContent ? `${multi ? 'Setlist' : mine.meta.title}${state.printAll || !act ? '' : ' - ' + act.book.name}` : 'Bandsheet';
     // print view header: which booklet, and (several songs) jump to a song in it
     $('pvInst').innerHTML = results.map((x) => `<option value="${esc(x.book.key)}"${x.book.key === state.activeKey ? ' selected' : ''}>${esc(x.book.name)}</option>`).join('');
     $('pvInfo').textContent = $('info').textContent;
@@ -505,7 +505,7 @@ Light the way back home (x2)
   // ── export / import the complete config (to share a reproducible bug report) ──
   $('exportCfg').addEventListener('click', () => {
     const payload = {
-      app: 'tabsprint', format: 1, exportedAt: new Date().toISOString(),
+      app: 'bandsheet', format: 1, exportedAt: new Date().toISOString(),
       env: { userAgent: navigator.userAgent, language: navigator.language, viewport: [innerWidth, innerHeight],
              devicePixelRatio: window.devicePixelRatio, colorScheme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light' },
       state: JSON.parse(JSON.stringify(state)),   // everything: mode, songs (tabs, key/capo, instruments), options, view
@@ -513,7 +513,7 @@ Light the way back home (x2)
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
     const a = document.createElement('a');
-    a.href = url; a.download = `tabsprint-config-${payload.exportedAt.slice(0, 10)}.json`;
+    a.href = url; a.download = `bandsheet-config-${payload.exportedAt.slice(0, 10)}.json`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
@@ -525,7 +525,7 @@ Light the way back home (x2)
     try {
       const o = JSON.parse(await file.text());
       if (!applyState(o && o.state ? o.state : o)) throw new Error('no songs/instruments found');
-    } catch (err) { alert('Could not import: this is not a tabsprint config (' + err.message + ').'); return; }
+    } catch (err) { alert('Could not import: this is not a Bandsheet config (' + err.message + ').'); return; }
     pcache.clear(); pendingScroll = false;
     $('layout').value = state.layout; $('printAll').checked = !!state.printAll;
     $('collapse').checked = state.collapse; $('notes').checked = state.notes; $('maxFont').value = state.maxFont; $('minFont').value = state.minFont;

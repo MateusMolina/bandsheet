@@ -1,7 +1,10 @@
-# tabsprint
+# Bandsheet
 
-A single static page: paste a chord sheet / tab from anywhere, add instruments, and print a compact
-**A4 booklet** (two A5 pages per landscape side, dashed fold line, saddle-stitch page order) for each one.
+One setlist, a part for every player. A single static page: paste chord sheets / tabs from anywhere, add the instruments of the band, and
+each player gets their part in the right key, on their phone through a link or as a compact **A4 booklet** (two A5 pages per landscape side,
+dashed fold line, saddle-stitch page order). Nothing is uploaded: a share link carries the whole setup in its URL.
+
+*(Formerly called tabsprint. Songs saved in the browser under the old name still load.)*
 
 **Use it:** open `index.html` in any browser. No server, no install, works offline.
 
@@ -89,9 +92,9 @@ days" aren't mistaken for chords.
 
 ## Dev
 
-**After editing `app.js` or `tabsprint.js`, run `npm run stamp`.** The host (GitHub Pages behind a CDN) caches scripts for hours but
+**After editing `app.js` or `bandsheet.js`, run `npm run stamp`.** The host (GitHub Pages behind a CDN) caches scripts for hours but
 `index.html` for only minutes, so without a version in the script URLs a browser can mix a new page with an old script and half-work
 (buttons silently dead). `stamp` writes a content hash into the `<script src="app.js?v=…">` URLs; `npm test` fails if it is stale.
 
-`tabsprint.js` is the dependency-free core (parser, transposition, layout, booklet imposition, HTML output) and also runs
+`bandsheet.js` is the dependency-free core (parser, transposition, layout, booklet imposition, HTML output) and also runs
 under Node; `app.js` is the UI. `npm test` (or `node --test tests/`) runs the core tests.

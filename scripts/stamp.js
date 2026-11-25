@@ -2,7 +2,7 @@
 /* Cache-busting for the static site. GitHub Pages / its CDN cache scripts for hours (index.html only 10 minutes), so a
  * browser can end up with a new index.html and an OLD app.js, which half-works (e.g. buttons that exist only in the new
  * page do nothing). Putting a content hash in each script URL (app.js?v=<hash>) makes any change fetch a fresh copy.
- * Run `npm run stamp` after editing app.js or tabsprint.js; the test suite fails if the stamps are stale.
+ * Run `npm run stamp` after editing app.js or bandsheet.js; the test suite fails if the stamps are stale.
  *   node scripts/stamp.js           rewrite the ?v= stamps in index.html
  *   node scripts/stamp.js --check   exit 1 if any stamp is stale */
 const fs = require('fs');
@@ -11,7 +11,7 @@ const crypto = require('crypto');
 
 const ROOT = path.join(__dirname, '..');
 const INDEX = path.join(ROOT, 'index.html');
-const SCRIPTS = ['tabsprint.js', 'app.js'];
+const SCRIPTS = ['bandsheet.js', 'app.js'];
 const hashOf = (f) => crypto.createHash('sha1').update(fs.readFileSync(path.join(ROOT, f))).digest('hex').slice(0, 10);
 
 /** -> { html, stale:[{file, have, want}] } with html rewritten to the correct stamps */
