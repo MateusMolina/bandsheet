@@ -14,7 +14,7 @@ Vocabulary: **shape** = the chord shapes being fingered (named like a key: "A sh
    card to select it and open its settings as a popover above the bar. The popover closes when focus leaves it (click elsewhere, Tab away), and the card stays
    selected. The selected card is the one shown in the centre, printed and jammed. The centre is a live **reader** of the selected instrument (chords already
    shifted for it, A−/A+ for the text size, scroll position kept while you edit the tab); **⤢ Full screen** shows just this instrument filling the screen (Esc
-   or *Back* returns; it is the same view a share link opens). Naming an instrument `vox`, `vocals`, `voice`, `singer` or `lyrics` turns on *Lyrics only* by itself.
+   or *Back* returns; it is the same view a share link opens). On a phone (touch screen, narrow) the app opens in this full-screen view by default; *Back* reaches the editor. Naming an instrument `vox`, `vocals`, `voice`, `singer` or `lyrics` turns on *Lyrics only* by itself.
    All of them play the same song, so each sounds in the song key; you fix one side and the other is computed:
    - **Lyrics only** — strips chords and tab (vocals).
    - **Tuning** — preset (standard, drop-d, dadgad, baritone-b, ukulele…) or notes like `B-E-A-D-F#-B`. A lower/higher tuning

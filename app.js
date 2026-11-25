@@ -817,7 +817,12 @@ Light the way back home (x2)
     $('collapse').checked = state.collapse; $('notes').checked = state.notes; $('maxFont').value = state.maxFont; $('minFont').value = state.minFont;
     loadInputs();
     render();
+    // on a phone the full-screen reader is the default (that is what you open a link for); "Back" reaches the editor
+    const phone = matchMedia('(pointer: coarse) and (max-width: 820px)').matches;
     if (ok && h.v === 'read') openReader(h.n, h.i);
-    else if (h.s) setHash({});
+    else if (ok && phone && state.songs.some((sg) => sg.text.trim())) {
+      const inst = cur().instruments.find((i) => instKey(i) === state.activeKey) || cur().instruments[0];
+      openReader(state.cur, inst.name.trim());
+    } else if (h.s) setHash({});
   })();
 })();
