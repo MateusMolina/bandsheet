@@ -22,6 +22,9 @@ Vocabulary: **shape** = the chord shapes being fingered (named like a key: "A sh
    - **Capo** → the shape is computed, or choose a **Shape** → the capo is computed (leave the other field empty = auto).
    - Set **both** shape and capo to play in a different key than the song, e.g. a fifth up. The card (and the printed header)
      then shows the resulting key and its interval to the song key, such as "perfect 5th above the song key (+7, = perfect 4th below)".
+   - **Reference** (checkbox in a card's settings; one per song): the song key follows this instrument. Changing *its* shape or capo changes the key, and every
+     other instrument follows (the baseline's Capo/Key fields then show the result and are locked). Its empty shape and capo default to the tab's own, so marking
+     it changes nothing by itself. Marked cards show ★. Lyrics-only instruments can't be the reference.
    - The tab's chords are shifted from the tab's shape to the instrument's shape (columns stay aligned); each card shows the
      shape, capo, key and shift.
 3. **Print…** (button above the instruments, or Esc to leave) opens the **print view**: the printing options on the left (layout, font sizes,

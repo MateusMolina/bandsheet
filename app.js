@@ -60,6 +60,7 @@ Light the way back home (x2)
   const newSong = (instruments) => ({
     id: nextSong++, text: '', title: '', artist: '',
     base: { shape: '', capo: 0, key: '' }, // the tab: shape ('' = detect) + capo -> key, or key -> capo
+    ref: null,                             // id of the reference instrument, whose shape/capo set the song key (null = the baseline does)
     instruments: instruments || [newGuitar('guitar')],
   });
 
@@ -95,7 +96,8 @@ Light the way back home (x2)
       const base = Object.assign({ shape: '', capo: 0, key: '' }, sg.base || {});
       if (sg.baseKey) base.shape = sg.baseKey;
       const ins = sg.instruments && sg.instruments.length ? sg.instruments : [newGuitar('guitar')];
-      return { id: n + 1, text: String(sg.text || ''), title: String(sg.title || ''), artist: String(sg.artist || ''), base, instruments: ins.map(normInstrument) };
+      const instruments = ins.map(normInstrument);
+      return { id: n + 1, text: String(sg.text || ''), title: String(sg.title || ''), artist: String(sg.artist || ''), base, ref: instruments.some((i) => i.id === sg.ref) ? sg.ref : null, instruments };
     });
     state.cur = Math.max(0, Math.min(state.songs.length - 1, s.cur || 0));
     nextSong = state.songs.length + 1;
@@ -128,6 +130,7 @@ Light the way back home (x2)
       <div class="csum" data-sum></div>
       <div class="cbody">
         <label class="chk"><input type="checkbox" data-f="lyricsOnly"${i.chords ? '' : ' checked'}> Lyrics only (strip chords)</label>
+        <label class="chk" title="The song key is how this instrument sounds: change its shape or capo to change the key, and every other instrument follows."><input type="checkbox" data-f="isRef"${cur().ref === i.id ? ' checked' : ''}> Reference: the key follows this one</label>
         <div class="grid" data-chordfields>
           <label>Tuning <select data-f="tuningSel">${tuningOptions(i.tuning)}</select></label>
           <label>Capo <input type="number" min="0" max="12" data-f="capo" value="${i.capo}" title="Leave empty for auto: computed so the instrument sounds in the song key"></label>
@@ -152,6 +155,8 @@ Light the way back home (x2)
       const i = cur().instruments.find((x) => x.id === +card.dataset.id);
       card.querySelector('[data-chordfields]').style.opacity = i.chords ? '' : '.4';
       card.querySelectorAll('[data-chordfields] select, [data-chordfields] input').forEach((el) => { el.disabled = !i.chords; });
+      const rc = card.querySelector('[data-f=isRef]');
+      rc.checked = cur().ref === i.id; rc.disabled = !i.chords;
     }
   }
 
@@ -171,6 +176,7 @@ Light the way back home (x2)
     const song = cur();
     if (song.instruments.length === 1 && !confirm('Remove the last instrument?')) return;
     song.instruments = song.instruments.filter((x) => x.id !== id);
+    if (song.ref === id) song.ref = null;
     openId = null;
     renderCards(); update();
   });
@@ -207,6 +213,7 @@ Light the way back home (x2)
       if (state.activeKey === was) state.activeKey = instKey(i);   // the selection follows a rename
     }
     else if (f === 'lyricsOnly') { i.chords = !v; }
+    else if (f === 'isRef') { cur().ref = v ? i.id : null; }
     else if (f === 'capo') i.capo = v === '' ? '' : Math.max(0, Math.min(12, parseInt(v, 10) || 0));
     else if (f === 'shape') i.shape = v;
     else if (f === 'tuningSel') {
@@ -234,9 +241,9 @@ Light the way back home (x2)
   function infoOf(song) {
     const s = parsedOf(song);
     const det = T.detectKey(s);
-    const base = T.resolveBaseline(song.base, det);
-    const res = new Map(song.instruments.map((i) => [i.id, T.resolveInstrument(i, base)]));
-    return { song, s, det, base, res, meta: { title: song.title || s.title || 'Untitled', artist: song.artist || s.artist || '' } };
+    const { base, ref } = T.resolveWithReference(song.base, det, song.instruments, song.ref);
+    const res = new Map(song.instruments.map((i) => [i.id, T.resolveInstrument(ref && ref.id === i.id ? ref : i, base)]));
+    return { song, s, det, base, res, refId: ref ? ref.id : null, meta: { title: song.title || s.title || 'Untitled', artist: song.artist || s.artist || '' } };
   }
   const setup = () => infoOf(cur());   // the song being edited (used by jam mode too)
   const partOf = (info, inst) => {
@@ -265,11 +272,15 @@ Light the way back home (x2)
 
     // baseline controls: shape + capo -> key, or key -> capo
     $('baseShape').innerHTML = noteOptions(song.base.shape, `Auto${det ? ` (detected: ${det.name}${det.minor ? ' minor' : ''})` : ''}`);
-    $('baseKey').innerHTML = noteOptions(song.base.key, `Computed (${base.keyText})`);
+    const refInst = mine.refId !== null ? song.instruments.find((i) => i.id === mine.refId) : null;
+    $('baseKey').innerHTML = noteOptions(refInst ? '' : song.base.key, refInst ? `${base.keyText} (from ${refInst.name.trim() || 'reference'})` : `Computed (${base.keyText})`);
+    $('baseKey').disabled = !!refInst;
     const bc = $('baseCapo');
-    bc.disabled = !!song.base.key; // capo is derived when the key is given directly
+    bc.disabled = !!song.base.key || !!refInst; // capo is derived when the key is given directly or comes from the reference
     setVal(bc, base.capo);
-    $('baseNote').textContent = song.base.key
+    $('baseNote').textContent = refInst
+      ? `The song sounds in ${base.keyText}: it follows the reference instrument (${refInst.name.trim() || 'reference'}). Change that instrument's shape or capo to change the key.`
+      : song.base.key
       ? `Song sounds in ${base.keyText}; the tab's ${base.shape} shapes then need capo ${base.capo}.`
       : `${base.shape} shapes${base.capo ? ` with capo ${base.capo}` : ' with no capo'} sound in ${base.keyText}.`;
     $('title').placeholder = s.title || 'Untitled';
@@ -287,12 +298,13 @@ Light the way back home (x2)
       const capoEl = card.querySelector('[data-f=capo]');
       const shapeEl = card.querySelector('[data-f=shape]');
       if (i.chords) {
-        shapeEl.options[0].textContent = `Auto (${T.resolveInstrument(Object.assign({}, i, { shape: '' }), base).shape})`;
+        const isRef = i.id === mine.refId;   // the reference defaults to the tab's own shape and capo
+        shapeEl.options[0].textContent = isRef ? `As in the tab (${base.shape})` : `Auto (${T.resolveInstrument(Object.assign({}, i, { shape: '' }), base).shape})`;
         setVal(capoEl, i.capo);
-        capoEl.placeholder = r0.capoAuto ? `auto ${r0.capo}` : '';
+        capoEl.placeholder = isRef ? `tab ${r0.capo}` : r0.capoAuto ? `auto ${r0.capo}` : '';
       }
-      card.querySelector('[data-sum]').textContent = !i.chords ? 'lyrics only'
-        : `${r0.shape} shapes${r0.capo ? ' · capo ' + r0.capo : ''}${r0.interval ? ' · ' + r0.keyText : ''}`;
+      card.querySelector('[data-sum]').textContent = (i.id === mine.refId ? '★ ' : '') + (!i.chords ? 'lyrics only'
+        : `${r0.shape} shapes${r0.capo ? ' · capo ' + r0.capo : ''}${r0.interval ? ' · ' + r0.keyText : ''}`);
       if (!i.chords) ro.innerHTML = `Lyrics only — chords and tab are left out. Sings in <b>${esc(base.keyText)}</b>.`;
       else if (bad) ro.textContent = 'Unrecognised tuning — use notes like B-E-A-D-F#-B.';
       else ro.innerHTML = `<b>${esc(r0.shape)}</b> shapes${r0.capo ? ` + capo <b>${r0.capo}</b>` : ''} → ` +
@@ -482,7 +494,10 @@ Light the way back home (x2)
   $('addSong').addEventListener('click', () => {
     // a new song starts with the same instruments (tuning, capo, shape) as the current one, but its own tab
     const copy = cur().instruments.map((i) => Object.assign({}, i, { id: nextId++ }));
-    state.songs.splice(state.cur + 1, 0, newSong(copy));
+    const ns = newSong(copy);
+    const at = cur().instruments.findIndex((i) => i.id === cur().ref);
+    if (at >= 0) ns.ref = copy[at].id;                 // the reference carries over, with its shape and capo
+    state.songs.splice(state.cur + 1, 0, ns);
     state.cur += 1;
     loadInputs(); render();
     $('src').focus();

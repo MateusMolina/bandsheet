@@ -338,6 +338,20 @@
     return { shape, shapePc, shapeAuto: !baseline.shape, capo, keyPc, keyName, keyMode, minor, keyText: keyLabel(keyName, minor) };
   }
 
+  /** The song key can follow a *reference instrument* instead of the baseline's own capo/key: the key is how that instrument
+   *  sounds, so changing its shape or capo changes the key and every other instrument follows. Its empty fields default to
+   *  the tab's own shape and capo (so marking an instrument as reference changes nothing by itself).
+   *  -> { base, ref } : base = resolveBaseline() for the effective key; ref = the reference instrument with those defaults
+   *  filled in (use it in place of the instrument for resolveInstrument), or null when there is no usable reference. */
+  function resolveWithReference(baseline, det, instruments, refId) {
+    const base0 = resolveBaseline(baseline, det);
+    const inst = refId === null || refId === undefined ? null : instruments.find((i) => i.id === refId && i.chords);
+    if (!inst) return { base: base0, ref: null };
+    const ref = Object.assign({}, inst, { shape: inst.shape || base0.shape, capo: isSet(inst.capo) ? clampCapo(inst.capo) : base0.capo });
+    const keyPc = mod(pc(ref.shape) + ref.capo + tuningShift(ref), 12);
+    return { base: resolveBaseline(Object.assign({}, baseline, { key: noteName(keyPc, base0.minor, null) }), det), ref };
+  }
+
   const INTERVALS = ['same key', 'minor 2nd', 'major 2nd', 'minor 3rd', 'major 3rd', 'perfect 4th', 'tritone',
     'perfect 5th', 'minor 6th', 'major 6th', 'minor 7th', 'major 7th'];
   /** Interval from the song key up to the instrument's key (0..11 semitones), in words. */
@@ -742,7 +756,7 @@
   const pipeBytes = async (u8, stream) => new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(stream)).arrayBuffer());
   /** The part of the app state worth sharing: songs (tabs, key/capo, instruments) and the print options; not UI state. */
   function shareSnapshot(st) {
-    const o = { songs: st.songs.map((sg) => ({ text: sg.text, title: sg.title, artist: sg.artist, base: sg.base, instruments: sg.instruments })) };
+    const o = { songs: st.songs.map((sg) => ({ text: sg.text, title: sg.title, artist: sg.artist, base: sg.base, ref: sg.ref, instruments: sg.instruments })) };
     for (const k of ['cur', 'collapse', 'notes', 'maxFont', 'minFont', 'layout', 'printAll', 'view']) o[k] = st[k];
     return o;
   }
@@ -773,7 +787,7 @@
     // chords
     isChord, parseChordToken, transposeToken, transposeChord, shapeShift, parseTuning, tuningOffset, TUNINGS, NOTE_NAMES,
     // parsing / instruments
-    parse, chordSegments, lineKinds, countOdd, stripInvisible, detectKey, applyInstrument, resolveBaseline, resolveInstrument, describe,
+    parse, chordSegments, lineKinds, countOdd, stripInvisible, detectKey, applyInstrument, resolveBaseline, resolveWithReference, resolveInstrument, describe,
     // layout / output
     bookletOrder, flatOrder, renderInstrument, renderBook, jamHtml,
     shareSnapshot, encodeShare, decodeShare, parseHash, buildHash, layout, constants: { SHEET_W, SHEET_H, PW, PH, MAX_SIZE, A4_W, A4_H },
