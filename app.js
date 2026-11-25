@@ -324,6 +324,8 @@ Light the way back home (x2)
 
     $('sheets').innerHTML = results.map((x) => `<div class="grp" data-key="${esc(x.book.key)}"><div class="v-print">${x.r.html}</div><div class="v-read">${x.r.htmlReading || ''}</div></div>`).join('');
     document.body.dataset.view = state.view;
+    // the paper orientation is fixed in the document, never toggled around print()
+    $('pageSize').textContent = state.layout === 'a4' ? '@page { size: A4 portrait; margin: 0; }' : '';
     $('view').value = state.view;
     $('sheets').querySelectorAll('.grp').forEach((g, k) => {
       const active = g.dataset.key === state.activeKey;
@@ -356,7 +358,9 @@ Light the way back home (x2)
       const pg = `${act.r.pages} page${act.r.pages === 1 ? '' : 's'}`;
       const out = act.r.mode === 'booklet'
         ? `booklet: ${act.r.sheets} sheet${act.r.sheets === 1 ? '' : 's'}, ${act.r.sides} sides, duplex flip on short edge`
-        : `${act.r.sides} side${act.r.sides === 1 ? '' : 's'}, pages side by side (no folding)`;
+        : act.r.mode === 'a4'
+          ? `${act.r.sides} A4 portrait sheet${act.r.sides === 1 ? '' : 's'}, one page each (no folding)`
+          : `${act.r.sides} side${act.r.sides === 1 ? '' : 's'}, pages side by side (no folding)`;
       $('info').textContent = `${pg} → ${out} · ${act.r.size.toFixed(1)}pt${warn}`;
     }
     $('foldnote').hidden = !(act && act.r.pages && act.r.mode === 'booklet' && state.view === 'sheets');
@@ -410,7 +414,7 @@ Light the way back home (x2)
   function fitPreview() {
     const avail = $('pmain').clientWidth - 24;   // minus its padding; 0 while the print view is closed
     if (avail <= 0) return;
-    const w = 841.89 * (96 / 72);
+    const w = (state.layout === 'a4' ? 595.28 : 841.89) * (96 / 72);
     $('sheets').style.zoom = Math.min(1, avail / w).toFixed(3);
   }
   window.addEventListener('resize', fitPreview);

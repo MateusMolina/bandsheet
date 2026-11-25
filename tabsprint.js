@@ -447,6 +447,10 @@
   const TOP = 13 * MM, BOTTOM = 11 * MM, INNER = 12 * MM, OUTER = 8 * MM;
   const MIN_SIZE = 7.5, MAX_SIZE = 9.5, PAIR_GAP = 0.3;
   const CONTENT_W = PW - INNER - OUTER;
+  // A4 portrait, one page per sheet (no folding): same margins both sides; height a few pt under the page, like SHEET_H
+  const A4_W = 595.28, A4_H = 835, A4_M = 14 * MM;
+  const GEO_A5 = { cw: CONTENT_W, ph: PH };
+  const GEO_A4 = { cw: A4_W - 2 * A4_M, ph: A4_H };
 
   const rowHeight = (kind, lh) => (kind === 'header' ? lh * 1.3 : kind === 'gap' ? lh * 0.45 : lh);
   const unitHeight = (u, lh) =>
@@ -572,7 +576,9 @@
 
   /** The font is sized so ~97% of the lines fit the page width, but never below minSize (default MIN_SIZE):
    *  at the minimum, wider lines wrap instead of shrinking the text further. minSize is capped at maxSize. */
-  function layout(sections, meta, maxSize, fit, minSize) {
+  function layout(sections, meta, maxSize, fit, minSize, geo) {
+    geo = geo || GEO_A5;
+    const CONTENT_W = geo.cw;
     const lo = Math.min(minSize || MIN_SIZE, maxSize);
     const base = Math.min(maxSize, CONTENT_W / (0.6 * targetCols(sections)));
     const size0 = Math.max(lo, base);
@@ -581,7 +587,7 @@
       const lh = sz * 1.22;
       const tb = titleBlock(meta.title, meta.artist, meta.instName, meta.desc, meta.notes);
       const tbH = tb.reduce((a, l) => a + l.adv, 0) + 4;
-      return { pages: paginate(sections, tbH, lh, cols, PH - TOP - BOTTOM), size: sz, lh, tb };
+      return { pages: paginate(sections, tbH, lh, cols, geo.ph - TOP - BOTTOM), size: sz, lh, tb };
     };
     let res = run(size0);
     if (fit && res.pages.length % 4 === 1 && res.pages.length > 1) { // pull a lone stray page back onto the sheet
@@ -614,9 +620,10 @@
 
   /** localNo: page within its song (1 = title block); globalNo: number printed on the page. */
   function pageHtml(L, localNo, meta, side, globalNo) {
+    const single = side === 'S'; // A4 portrait: one page per sheet, equal margins
     const odd = side === 'R'; // right-hand page: gutter (inner margin) on the left
-    const left = odd ? INNER : OUTER;
-    const right = odd ? OUTER : INNER;
+    const left = single ? A4_M : odd ? INNER : OUTER;
+    const right = single ? A4_M : odd ? OUTER : INNER;
     const sz = L.size, lh = L.lh;
     let h = '';
     if (localNo === 1) {
@@ -625,7 +632,7 @@
     } else {
       h += `<div class="rh" style="left:${f(left)}pt;top:${f(8 * MM)}pt">${esc(meta.title + ' — ' + meta.instName)}</div>`;
     }
-    h += `<div class="pn" style="${odd ? 'right' : 'left'}:${f(OUTER)}pt">${globalNo}</div>`;
+    h += `<div class="pn" style="${single ? 'left:0;right:0;text-align:center' : (odd ? 'right' : 'left') + ':' + f(OUTER) + 'pt'}">${globalNo}</div>`;
     for (const p of L.pages[localNo - 1]) {
       const r = p.row, top = f(TOP + p.y);
       if (r.kind === 'gap') continue; // spacing only; has no text to draw
@@ -649,18 +656,19 @@
   function renderBook(parts, opts) {
     opts = opts || {};
     const want = opts.layout || 'auto'; // auto: booklet for 3+ pages, plain side-by-side spreads for 1–2
-    const fit = !opts.noFit && want !== 'flat' && parts.length === 1;
+    const a4 = want === 'a4';
+    const fit = !opts.noFit && want !== 'flat' && !a4 && parts.length === 1;
     const refs = [], ranges = [];
     let size = 0;
     for (const p of parts) {
-      const L = layout(p.sections, p.meta, opts.maxSize || MAX_SIZE, fit, opts.minSize);
+      const L = layout(p.sections, p.meta, opts.maxSize || MAX_SIZE, fit, opts.minSize, a4 ? GEO_A4 : GEO_A5);
       ranges.push({ title: p.meta.title, from: refs.length + 1, to: refs.length + L.pages.length });
       L.pages.forEach((_, i) => refs.push({ L, meta: p.meta, local: i + 1 }));
       size = size ? Math.min(size, L.size) : L.size;
     }
     const n = refs.length;
-    const mode = want === 'flat' || (want === 'auto' && n <= 2) ? 'flat' : 'booklet';
-    const sides = mode === 'flat' ? flatOrder(n) : bookletOrder(n);
+    const mode = a4 ? 'a4' : want === 'flat' || (want === 'auto' && n <= 2) ? 'flat' : 'booklet';
+    const sides = mode === 'a4' ? Array.from({ length: Math.max(n, 1) }, (_, k) => [k + 1 <= n ? k + 1 : null, null]) : mode === 'flat' ? flatOrder(n) : bookletOrder(n);
     const sideOf = {};
     sides.forEach(([a, b], k) => { if (a) sideOf[a] = k; if (b) sideOf[b] = k; });
     ranges.forEach((r) => { r.side = sideOf[r.from] || 0; });
@@ -668,23 +676,25 @@
     const build = (list, capOf, fold) => {
       let html = '';
       list.forEach(([a, b], k) => {
-        html += `<div class="cap">${capOf(k, a, b)}</div><section class="sheet">`;
-        for (const [pn, x, side] of [[a, 0, 'L'], [b, PW, 'R']]) {
-          if (pn) { const ref = refs[pn - 1]; html += `<div class="pg" style="left:${f(x)}pt">${pageHtml(ref.L, ref.local, ref.meta, side, pn)}</div>`; }
+        html += `<div class="cap">${capOf(k, a, b)}</div><section class="sheet${a4 ? ' a4' : ''}">`;
+        for (const [pn, x, side] of a4 ? [[a, 0, 'S']] : [[a, 0, 'L'], [b, PW, 'R']]) {
+          if (pn) { const ref = refs[pn - 1]; html += `<div class="pg${a4 ? ' a4' : ''}" style="left:${f(x)}pt">${pageHtml(ref.L, ref.local, ref.meta, side, pn)}</div>`; }
         }
         html += (fold ? '<div class="fold"></div>' : '') + '</section>';
       });
       return html;
     };
     // what gets printed: a flat spread per side, or booklet sheets imposed for folding (pages are NOT in reading order)
-    const html = mode === 'flat'
+    const html = mode === 'a4'
+      ? build(sides, (k, a) => `Page ${a} — A4 portrait`, false)
+      : mode === 'flat'
       ? build(sides, (k, a, b) => `Side ${k + 1} — pages ${lab(a)} | ${lab(b)}`, false)
       : build(sides, (k, a, b) => `Sheet ${(k >> 1) + 1} · ${k % 2 ? 'back' : 'front'} — pages ${lab(a)} | ${lab(b)}`, true);
     // the same pages in reading order, for previewing only
-    const htmlReading = mode === 'flat' ? html
+    const htmlReading = mode !== 'booklet' ? html
       : build(flatOrder(n), (k, a, b) => `Pages ${a}${b ? ' | ' + b : ''}`, false);
-    ranges.forEach((r) => { r.readSide = (r.from - 1) >> 1; });
-    return { html, htmlReading, pages: n, sides: sides.length, sheets: mode === 'flat' ? sides.length : sides.length / 2, mode, size, ranges };
+    ranges.forEach((r) => { r.readSide = mode === 'a4' ? r.from - 1 : (r.from - 1) >> 1; });
+    return { html, htmlReading, pages: n, sides: sides.length, sheets: mode === 'booklet' ? sides.length / 2 : sides.length, mode, size, ranges };
   }
   const renderInstrument = (sections, meta, opts) => renderBook([{ sections, meta }], opts);
 
@@ -766,7 +776,7 @@
     parse, chordSegments, lineKinds, countOdd, stripInvisible, detectKey, applyInstrument, resolveBaseline, resolveInstrument, describe,
     // layout / output
     bookletOrder, flatOrder, renderInstrument, renderBook, jamHtml,
-    shareSnapshot, encodeShare, decodeShare, parseHash, buildHash, layout, constants: { SHEET_W, SHEET_H, PW, PH, MAX_SIZE },
+    shareSnapshot, encodeShare, decodeShare, parseHash, buildHash, layout, constants: { SHEET_W, SHEET_H, PW, PH, MAX_SIZE, A4_W, A4_H },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TabsPrint = api;

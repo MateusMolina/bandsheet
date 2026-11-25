@@ -351,3 +351,18 @@ test('jamHtml wraps long lines to the pane width, chords staying over their word
   assert.ok(lines(wrapped) > 2);
   for (const m of wrapped.matchAll(/<div class="jl[^"]*">([^<]*(?:<(?:b|em)>[^<]*<\/(?:b|em)>[^<]*)*)<\/div>/g)) assert.ok(m[1].replace(/<[^>]+>/g, '').length <= 20, m[1]);
 });
+
+test('A4 portrait layout: one page per sheet, wider text area, no folding', () => {
+  const song = T.applyInstrument(T.parse('T\n\n[Verse]\n' + 'C  G\nHello there my dear old friend of mine\n'.repeat(80)), inst({}), 0);
+  const meta = { title: 'T', artist: '', instName: 'g', desc: 'd', notes: [] };
+  const a4 = T.renderInstrument(song, meta, { layout: 'a4' });
+  const flat = T.renderInstrument(song, meta, { layout: 'flat' });
+  assert.equal(a4.mode, 'a4');
+  assert.equal(a4.sides, a4.pages);
+  assert.equal(a4.sheets, a4.pages);
+  assert.equal((a4.html.match(/<section class="sheet a4">/g) || []).length, a4.pages);
+  assert.ok(!a4.html.includes('class="fold"'));
+  assert.ok(a4.pages < flat.pages);                 // taller pages hold more
+  assert.equal(a4.htmlReading, a4.html);
+  assert.equal(a4.ranges[0].side, 0);
+});

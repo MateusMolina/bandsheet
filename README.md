@@ -30,7 +30,8 @@ Vocabulary: **shape** = the chord shapes being fingered (named like a key: "A sh
    Layout is *Auto* by default: songs of 3+ pages become a saddle-stitch booklet (A4 landscape, two A5 pages per side,
    dashed fold line; print **duplex, flip on the short edge**, then fold). Songs of 1–2 pages are printed as plain pages
    side by side, with no folding and no blank halves. You can force either layout in the print view.
-   Print dialog: A4 landscape, 100% scale, no margins, no headers/footers. "Save as PDF" gives a file.
+   **A4 portrait** (Layout option) prints one full A4 page per sheet instead (no folding, no two-per-page); the page itself asks for portrait paper.
+   Print dialog: A4 landscape (portrait for that layout), 100% scale, no margins, no headers/footers. "Save as PDF" gives a file.
 4. **Jam mode** (needs 2+ instruments): splits the screen in two, one instrument per half, scrolling together. Panes are aligned
    by song section, so a lyrics-only pane stays level with a chord pane even though their lengths differ. Esc closes it; A−/A+ resize the text.
 
