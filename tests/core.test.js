@@ -341,3 +341,13 @@ test('share links round-trip the config and parse their hash', async () => {
   assert.deepEqual(T.parseHash('#' + h), { s: enc, v: 'read', n: 2, i: 'guitar 1' });
   assert.deepEqual(T.parseHash(''), { s: null, v: null, n: null, i: null });
 });
+
+test('jamHtml wraps long lines to the pane width, chords staying over their words', () => {
+  const secs = T.applyInstrument(T.parse('[Verse]\nC           G\nHello there my dear old friend of mine\n'), inst({}), 0, false);
+  const flat = T.jamHtml(secs);
+  const wrapped = T.jamHtml(secs, 20);
+  const lines = (h) => (h.match(/class="jl/g) || []).length;
+  assert.equal(lines(flat), 2);
+  assert.ok(lines(wrapped) > 2);
+  for (const m of wrapped.matchAll(/<div class="jl[^"]*">([^<]*(?:<(?:b|em)>[^<]*<\/(?:b|em)>[^<]*)*)<\/div>/g)) assert.ok(m[1].replace(/<[^>]+>/g, '').length <= 20, m[1]);
+});

@@ -650,8 +650,21 @@ Light the way back home (x2)
     if (!ids.includes(state.jamA)) state.jamA = ids[0];
     if (!ids.includes(state.jamB) || state.jamB === state.jamA) state.jamB = ids.find((x) => x !== state.jamA);
   }
-  function renderJam() {
-    if (reading) return renderReader();
+  /** How many characters of the pane's monospace text fit across it (0 while the pane is not visible). */
+  function paneCols(el) {
+    if (!el.clientWidth) return 0;
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre';
+    probe.textContent = 'M'.repeat(40);
+    el.appendChild(probe);
+    const cw = probe.getBoundingClientRect().width / 40;
+    el.removeChild(probe);
+    const cs = getComputedStyle(el);
+    const avail = el.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+    return cw > 0 ? Math.max(10, Math.floor(avail / cw)) : 0;
+  }
+  function renderJam(keep) {
+    if (reading) return renderReader(keep);
     jamPick();
     const { s, base, res } = setup();
     const opts = cur().instruments.map((i) => [i.id, i.name.trim() || 'instrument']);
@@ -662,8 +675,11 @@ Light the way back home (x2)
       const r0 = res.get(inst.id);
       const secs = T.applyInstrument(s, inst, r0.shift, state.collapse);
       $('jt' + k).innerHTML = `<button type="button" class="jlink small" data-k="${k}" title="Copy a link that opens only this instrument (for a phone)">Link</button><b>${esc(inst.name.trim() || 'instrument')}</b><div>${esc(T.describe(inst, r0, base))}</div>`;
-      jam[k].innerHTML = T.jamHtml(secs);
+      const at = keep ? jamPos(jam[k]) : null;
+      $('jam').style.setProperty('--jf', state.jamFont + 'px');
+      jam[k].innerHTML = T.jamHtml(secs, paneCols(jam[k]));
       jam[k].scrollTop = 0;
+      if (at) jamSetPos(jam[k], at);
     }
     $('jam').style.setProperty('--jf', state.jamFont + 'px');
   }
@@ -704,7 +720,7 @@ Light the way back home (x2)
   // ── reader: ONE instrument, full width (what a share link opens; made for phones) ──
   let reading = false;
   const norm = (n) => (n || '').trim().toLowerCase() || 'instrument';
-  function renderReader() {
+  function renderReader(keep) {
     const song = cur();
     if (!song.instruments.some((i) => i.id === state.jamA)) state.jamA = song.instruments[0].id;
     const inst = song.instruments.find((i) => i.id === state.jamA);
@@ -714,9 +730,11 @@ Light the way back home (x2)
     $('rdSong').innerHTML = state.songs.map((sg, n) => `<option value="${n}"${n === state.cur ? ' selected' : ''}>${esc(sg.title.trim() || 'Song ' + (n + 1))}</option>`).join('');
     $('jamA').innerHTML = song.instruments.map((i) => `<option value="${i.id}"${i.id === inst.id ? ' selected' : ''}>${esc(i.name.trim() || 'instrument')}</option>`).join('');
     $('jtA').innerHTML = `<button type="button" class="jlink small" data-k="A" title="Copy a link to this view">Link</button><b>${esc(song.title.trim() || 'Untitled')}</b> · ${esc(inst.name.trim() || 'instrument')}<div>${esc(T.describe(inst, r0, base))}</div>`;
-    jam.A.innerHTML = T.jamHtml(T.applyInstrument(s, inst, r0.shift, state.collapse));
-    jam.A.scrollTop = 0;
     $('jam').style.setProperty('--jf', state.jamFont + 'px');
+    const at = keep ? jamPos(jam.A) : null;
+    jam.A.innerHTML = T.jamHtml(T.applyInstrument(s, inst, r0.shift, state.collapse), paneCols(jam.A));
+    jam.A.scrollTop = 0;
+    if (at) jamSetPos(jam.A, at);
     setHash({ v: 'read', n: state.cur, i: inst.name.trim() });
   }
   // ── the centre: the selected instrument as a live reader (same view as jam mode, one pane) ──
@@ -738,21 +756,24 @@ Light the way back home (x2)
     const r0 = res.get(inst.id);
     const key = song.id + ':' + inst.id, top = inlineKey === key ? sc.scrollTop : 0;   // keep the place while the tab is being edited
     $('ipTitle').innerHTML = `<b>${esc(song.title.trim() || s.title || 'Untitled')}</b> · ${esc(inst.name.trim() || 'instrument')}<div>${esc(T.describe(inst, r0, base))}</div>`;
-    sc.innerHTML = T.jamHtml(T.applyInstrument(s, inst, r0.shift, state.collapse));
-    sc.scrollTop = top; inlineKey = key;
     $('stage').style.setProperty('--jf', state.jamFont + 'px');
+    sc.innerHTML = T.jamHtml(T.applyInstrument(s, inst, r0.shift, state.collapse), paneCols(sc));
+    sc.scrollTop = top; inlineKey = key;
   }
   $('ipFull').addEventListener('click', () => {
     const inst = cur().instruments.find((i) => instKey(i) === state.activeKey);
     if (inst) openReader(state.cur, inst.name.trim());
   });
-  const inlineFont = (d) => { state.jamFont = Math.max(10, Math.min(40, state.jamFont + d)); save(); $('stage').style.setProperty('--jf', state.jamFont + 'px'); };
+  const inlineFont = (d) => { state.jamFont = Math.max(10, Math.min(40, state.jamFont + d)); save(); render(); };
   $('ipMinus').addEventListener('click', () => inlineFont(-1));
   $('ipPlus').addEventListener('click', () => inlineFont(1));
   // the fixed instrument bar must not cover the page: reserve its height
   const reserveBar = () => document.documentElement.style.setProperty('--bb', $('cardrow').offsetHeight + 'px');
   new ResizeObserver(reserveBar).observe($('cardrow'));
   window.addEventListener('resize', placePopover);
+  // a new width (rotating a phone, resizing the window) means new line breaks
+  let rwTimer;
+  window.addEventListener('resize', () => { clearTimeout(rwTimer); rwTimer = setTimeout(() => { if (!$('jam').hidden) renderJam(true); else render(); }, 120); });
 
   function openReader(n, name) {
     state.cur = Math.max(0, Math.min(state.songs.length - 1, n || 0));
@@ -792,7 +813,7 @@ Light the way back home (x2)
   document.addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; if (!$('editor').hidden) closeEditor(); else if (!$('jam').hidden) closeJam(); else if (!$('printview').hidden) closePrint(); });
   $('jamA').addEventListener('change', (e) => { state.jamA = +e.target.value; if (state.jamB === state.jamA) state.jamB = null; save(); renderJam(); });
   $('jamB').addEventListener('change', (e) => { state.jamB = +e.target.value; if (state.jamA === state.jamB) state.jamA = null; save(); renderJam(); });
-  const jamFont = (d) => { state.jamFont = Math.max(10, Math.min(40, state.jamFont + d)); save(); $('jam').style.setProperty('--jf', state.jamFont + 'px'); };
+  const jamFont = (d) => { state.jamFont = Math.max(10, Math.min(40, state.jamFont + d)); save(); renderJam(true); };   // re-wraps to the new size
   $('jamMinus').addEventListener('click', () => jamFont(-1));
   $('jamPlus').addEventListener('click', () => jamFont(1));
 

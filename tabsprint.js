@@ -689,11 +689,13 @@
   const renderInstrument = (sections, meta, opts) => renderBook([{ sections, meta }], opts);
 
   /** Scrollable, unpaginated view of one instrument's sections for jam mode. */
-  function jamHtml(sections) {
+  /** HTML for the jam / reader panes. With `cols` (characters that fit the pane), long lines wrap the way printed pages do
+   *  (chords stay above the right words); without it lines are left as they are and the pane scrolls sideways. */
+  function jamHtml(sections, cols) {
     return sections.map((sec) => {
       let h = `<div class="jsec" data-src="${sec.idx}">`;
       if (sec.title) h += `<div class="jhd">${esc(sec.title)}</div>`;
-      for (const u of sec.units) {
+      for (const u of (cols > 0 ? sec.units.map((x) => wrapUnit(x, cols)) : sec.units)) {
         if (u[0].kind === 'gap') { h += '<div class="jgap"></div>'; continue; }
         h += '<div class="junit">' + u.map((r) => {
           if (r.kind === 'chords') {
