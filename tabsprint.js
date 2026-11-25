@@ -338,26 +338,29 @@
     return { shape, shapePc, shapeAuto: !baseline.shape, capo, keyPc, keyName, keyMode, minor, keyText: keyLabel(keyName, minor) };
   }
 
-  /** The song key can follow a *reference instrument* instead of the baseline's own capo/key: the key is how that instrument
-   *  sounds, so changing its shape or capo changes the key and every other instrument follows. Its empty fields default to
-   *  the tab's own shape and capo (so marking an instrument as reference changes nothing by itself).
-   *  -> { base, ref } : base = resolveBaseline() for the effective key; ref = the reference instrument with those defaults
-   *  filled in (use it in place of the instrument for resolveInstrument), or null when there is no usable reference. */
+  /** Two keys, not one. The *song key* is the tab's own key (its shape + capo, or the key you set) and is never changed by
+   *  anything below. The *reference key* is the key the other instruments are compared to: it is the song key unless an
+   *  instrument is marked as the reference, in which case it is how that instrument sounds (so you can play the song in another
+   *  key). The reference's empty shape and capo default to the tab's own, so marking it changes nothing by itself.
+   *  -> { base, target, ref }: base = resolveBaseline() (the song key, untouched); target = the same with the reference key,
+   *  to pass as `base` for every instrument but the reference (it has viaRef set); ref = the reference instrument with its
+   *  defaults filled in (resolve it against `base`, so its interval says how far it is from the song key), or null. */
   function resolveWithReference(baseline, det, instruments, refId) {
-    const base0 = resolveBaseline(baseline, det);
+    const base = resolveBaseline(baseline, det);
     const inst = refId === null || refId === undefined ? null : instruments.find((i) => i.id === refId && i.chords);
-    if (!inst) return { base: base0, ref: null };
-    const ref = Object.assign({}, inst, { shape: inst.shape || base0.shape, capo: isSet(inst.capo) ? clampCapo(inst.capo) : base0.capo });
+    if (!inst) return { base, target: base, ref: null };
+    const ref = Object.assign({}, inst, { shape: inst.shape || base.shape, capo: isSet(inst.capo) ? clampCapo(inst.capo) : base.capo });
     const keyPc = mod(pc(ref.shape) + ref.capo + tuningShift(ref), 12);
-    return { base: resolveBaseline(Object.assign({}, baseline, { key: noteName(keyPc, base0.minor, null) }), det), ref };
+    const keyName = noteName(keyPc, base.minor, null);
+    return { base, ref, target: Object.assign({}, base, { keyPc, keyName, keyText: keyLabel(keyName, base.minor), viaRef: true }) };
   }
 
   const INTERVALS = ['same key', 'minor 2nd', 'major 2nd', 'minor 3rd', 'major 3rd', 'perfect 4th', 'tritone',
     'perfect 5th', 'minor 6th', 'major 6th', 'minor 7th', 'major 7th'];
   /** Interval from the song key up to the instrument's key (0..11 semitones), in words. */
-  function intervalText(iv) {
+  function intervalText(iv, against) {
     if (!iv) return '';
-    return `${INTERVALS[iv]} above the song key (+${iv}` + (iv > 6 ? `, = ${INTERVALS[12 - iv]} below` : '') + ')';
+    return `${INTERVALS[iv]} above the ${against || 'song key'} (+${iv}` + (iv > 6 ? `, = ${INTERVALS[12 - iv]} below` : '') + ')';
   }
   const isSet = (v) => v !== '' && v !== null && v !== undefined;
 
@@ -365,7 +368,8 @@
    *  Shape and capo can each be set or left auto. One set -> the other is computed so it sounds in the song key.
    *  Both set -> free choice: the instrument may sound in another key (interval shown). Neither -> capo 0. */
   function resolveInstrument(inst, base) {
-    if (!inst.chords) return { chords: false, shift: 0, keyText: base.keyText, interval: 0, intervalText: '' };
+    const against = base.viaRef ? 'reference key' : 'song key';   // what `interval` is measured from
+    if (!inst.chords) return { chords: false, shift: 0, keyText: base.keyText, interval: 0, intervalText: '', against, againstText: base.keyText };
     const off = tuningShift(inst);
     let shapePc, capo, capoAuto = false, shapeAuto = false;
     if (inst.shape) {
@@ -383,7 +387,7 @@
     return {
       chords: true, shape: inst.shape || noteName(shapePc, base.minor, null), shapeAuto, capo, capoAuto,
       shift: roundTrip(shapePc - base.shapePc), tuningOff: off,
-      keyText: keyLabel(interval ? noteName(keyPc, base.minor, null) : base.keyName, base.minor), interval, intervalText: intervalText(interval),
+      keyText: keyLabel(interval ? noteName(keyPc, base.minor, null) : base.keyName, base.minor), interval, intervalText: intervalText(interval, against), against, againstText: base.keyText,
     };
   }
 
@@ -399,7 +403,7 @@
     } catch (e) { /* invalid tuning: omit */ }
     parts.push(r.capo ? `capo ${r.capo}` : 'no capo');
     parts.push(r.shift ? `${r.shape} shapes (tab's ${base.shape} played as ${r.shape})` : `${r.shape} shapes (as written)`);
-    parts.push(r.interval ? `sounds in ${r.keyText}: ${r.intervalText.replace('the song key', 'the song key ' + base.keyText)}` : `key ${base.keyText}`);
+    parts.push(r.interval ? `sounds in ${r.keyText}: ${r.intervalText.replace('the ' + r.against, 'the ' + r.against + ' ' + r.againstText)}` : `key ${r.keyText}${r.against === 'reference key' ? ' (the reference key)' : ''}`);
     return parts.join(' · ');
   }
 

@@ -367,30 +367,42 @@ test('A4 portrait layout: one page per sheet, wider text area, no folding', () =
   assert.equal(a4.ranges[0].side, 0);
 });
 
-test('a reference instrument sets the song key; the others follow it', () => {
+test('a reference instrument sets the reference key; the song key never changes', () => {
   const song = T.parse('[Verse]\nG   C   D\nla la la\n');
   const det = T.detectKey(song);
+  const bl = { shape: 'G', capo: 0, key: '' };
   const g1 = inst({ id: 1, name: 'guitar1' }), g2 = inst({ id: 2, name: 'guitar2' });
-  // no reference: the baseline decides (G shapes, no capo -> key G); guitar2 follows
-  let r = T.resolveWithReference({ shape: 'G', capo: 0, key: '' }, det, [g1, g2], null);
+  // no reference: reference key = song key
+  let r = T.resolveWithReference(bl, det, [g1, g2], null);
   assert.equal(r.ref, null);
+  assert.equal(r.target, r.base);
   assert.equal(r.base.keyText, 'G');
   // marking guitar1 as reference changes nothing by itself
-  r = T.resolveWithReference({ shape: 'G', capo: 0, key: '' }, det, [g1, g2], 1);
-  assert.equal(r.base.keyText, 'G');
+  r = T.resolveWithReference(bl, det, [g1, g2], 1);
+  assert.equal(r.base.keyText, 'G'); assert.equal(r.target.keyText, 'G');
   assert.equal(r.ref.shape, 'G'); assert.equal(r.ref.capo, 0);
-  // now the reference moves its capo to 2: the song sounds in A, guitar2 (auto) plays A shapes... with no capo
+  // the reference plays with capo 2: the *reference* key is A, the song key is still G
   const g1b = inst({ id: 1, name: 'guitar1', capo: 2 });
-  r = T.resolveWithReference({ shape: 'G', capo: 0, key: '' }, det, [g1b, g2], 1);
-  assert.equal(r.base.keyText, 'A');
+  r = T.resolveWithReference(bl, det, [g1b, g2], 1);
+  assert.equal(r.base.keyText, 'G');
+  assert.equal(r.target.keyText, 'A');
+  assert.equal(r.base.capo, 0);                  // the baseline is untouched too
   const own = T.resolveInstrument(r.ref, r.base);
-  assert.equal(own.interval, 0);               // the reference sounds exactly in the song key
-  assert.equal(own.shift, 0);                   // and plays the tab's chords as written
-  const other = T.resolveInstrument(g2, r.base);
-  assert.equal(other.keyText, 'A');
+  assert.equal(own.interval, 2);                 // the reference is 2 semitones above the song key
+  assert.match(own.intervalText, /above the song key/);
+  assert.equal(own.shift, 0);                    // and plays the tab's chords as written (G shapes, capo 2)
+  const other = T.resolveInstrument(g2, r.target);
+  assert.equal(other.keyText, 'A');              // others sound in the reference key
+  assert.equal(other.interval, 0);
+  assert.equal(other.against, 'reference key');
   assert.equal(other.shape, 'A'); assert.equal(other.capo, 0);
-  assert.equal(other.shift, 2);                 // G -> A: chords shift by 2
+  assert.equal(other.shift, 2);
+  assert.match(T.describe(g2, other, r.base), /key A \(the reference key\)/);
+  // set both fields on another instrument: its interval is measured from the reference key
+  const odd = T.resolveInstrument(inst({ id: 3, shape: 'G', capo: 4 }), r.target);
+  assert.equal(odd.keyText, 'B');
+  assert.match(odd.intervalText, /above the reference key/);
   // a lyrics-only instrument can't be the reference
-  r = T.resolveWithReference({ shape: 'G', capo: 0, key: '' }, det, [inst({ id: 1, chords: false, capo: 5 })], 1);
+  r = T.resolveWithReference(bl, det, [inst({ id: 1, chords: false, capo: 5 })], 1);
   assert.equal(r.ref, null);
 });
